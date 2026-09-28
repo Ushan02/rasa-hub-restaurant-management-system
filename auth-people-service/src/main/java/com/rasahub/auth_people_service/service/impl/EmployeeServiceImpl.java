@@ -12,6 +12,7 @@ import com.rasahub.auth_people_service.repository.AuthAccountRepository;
 import com.rasahub.auth_people_service.repository.BranchRepository;
 import com.rasahub.auth_people_service.repository.EmployeeRepository;
 import com.rasahub.auth_people_service.service.EmployeeService;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,12 @@ public class EmployeeServiceImpl implements EmployeeService {
             EmployeePosition.WAITER,
             EmployeePosition.CHEF,
             EmployeePosition.DELIVERY_PERSON
+    );
+
+    private static final Set<EmployeePosition> ACCOUNTANT_RESTRICTED_POSITIONS = Set.of(
+            EmployeePosition.OWNER,
+            EmployeePosition.MAIN_OFFICE_MANAGER,
+            EmployeePosition.ACCOUNTANT
     );
 
     private final EmployeeRepository employeeRepository;
@@ -44,7 +51,21 @@ public class EmployeeServiceImpl implements EmployeeService {
 
     @Override
     @Transactional
-    public EmployeeResponse createEmployee(EmployeeCreateRequest request) {
+    public EmployeeResponse createEmployee(EmployeeCreateRequest request, Role callerRole) {
+
+        // Privilege-escalation guards run first because they are the cheapest checks.
+
+        // Only an Owner can register another Owner
+        if (request.getPosition() == EmployeePosition.OWNER
+                && callerRole != Role.OWNER) {
+            throw new AccessDeniedException("Only an Owner can register another Owner");
+        }
+
+        // An Accountant cannot register top-level positions
+        if (callerRole == Role.ACCOUNTANT
+                && ACCOUNTANT_RESTRICTED_POSITIONS.contains(request.getPosition())) {
+            throw new AccessDeniedException("Not allowed to register this position");
+        }
 
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new BusinessRuleException("Branch not found"));
