@@ -6,6 +6,7 @@ import com.rasahub.auth_people_service.entity.AuthAccount;
 import com.rasahub.auth_people_service.entity.Customer;
 import com.rasahub.auth_people_service.enums.Role;
 import com.rasahub.auth_people_service.exception.BusinessRuleException;
+import com.rasahub.auth_people_service.exception.ResourceNotFoundException;
 import com.rasahub.auth_people_service.repository.AuthAccountRepository;
 import com.rasahub.auth_people_service.repository.CustomerRepository;
 import com.rasahub.auth_people_service.service.CustomerService;
@@ -83,6 +84,29 @@ public class CustomerServiceImpl implements CustomerService {
                 savedCustomer.getEmail(),
                 savedCustomer.isMarketingConsent(),
                 savedCustomer.getAuthAccount() != null
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerResponse getMyProfile(Long accountId) {
+
+        Customer customer =
+                customerRepository.findByAuthAccount_Id(accountId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Customer profile not found"
+                                )
+                        );
+
+        return new CustomerResponse(
+                customer.getId(),
+                customer.getFirstName(),
+                customer.getLastName(),
+                customer.getPhone(),
+                customer.getEmail(),
+                customer.isMarketingConsent(),
+                customer.getAuthAccount() != null
         );
     }
 }

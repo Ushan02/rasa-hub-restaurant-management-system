@@ -14,24 +14,75 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException e) {
+    public ResponseEntity<Map<String, String>> handleBadCredentials(
+            BadCredentialsException e
+    ) {
+
         Map<String, String> body = new HashMap<>();
-        body.put("message", "Invalid credentials");
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(body);
+
+        body.put(
+                "message",
+                "Invalid credentials"
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(body);
     }
 
     @ExceptionHandler(BusinessRuleException.class)
-    public ResponseEntity<Map<String, String>> handleBusinessRule(BusinessRuleException e) {
+    public ResponseEntity<Map<String, String>> handleBusinessRule(
+            BusinessRuleException e
+    ) {
+
         Map<String, String> body = new HashMap<>();
-        body.put("message", e.getMessage());
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+
+        body.put(
+                "message",
+                e.getMessage()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(body);
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, String>> handleResourceNotFound(
+            ResourceNotFoundException e
+    ) {
+
+        Map<String, String> body = new HashMap<>();
+
+        body.put(
+                "message",
+                e.getMessage()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidationErrors(MethodArgumentNotValidException e) {
-        Map<String, String> errors = new HashMap<>();
-        e.getBindingResult().getFieldErrors().forEach(error ->
-                errors.put(error.getField(), error.getDefaultMessage()));
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errors);
+    public ResponseEntity<Map<String, String>> handleValidationErrors(
+            MethodArgumentNotValidException e
+    ) {
+
+        Map<String, String> errors =
+                new HashMap<>();
+
+        e.getBindingResult()
+                .getFieldErrors()
+                .forEach(error ->
+                        errors.put(
+                                error.getField(),
+                                error.getDefaultMessage()
+                        )
+                );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(errors);
     }
 }
