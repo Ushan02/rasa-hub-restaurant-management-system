@@ -2,6 +2,7 @@ package com.rasahub.auth_people_service.controller;
 
 import com.rasahub.auth_people_service.dto.customer.CustomerCreateRequest;
 import com.rasahub.auth_people_service.dto.customer.CustomerResponse;
+import com.rasahub.auth_people_service.dto.customer.CustomerUpdateRequest;
 import com.rasahub.auth_people_service.security.CustomUserPrincipal;
 import com.rasahub.auth_people_service.service.CustomerService;
 import jakarta.validation.Valid;
@@ -43,6 +44,22 @@ public class CustomerController {
         CustomerResponse response =
                 customerService.getMyProfile(
                         principal.getAccountId()
+                );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/me")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<CustomerResponse> updateMyProfile(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody CustomerUpdateRequest request
+    ) {
+
+        CustomerResponse response =
+                customerService.updateMyProfile(
+                        principal.getAccountId(),
+                        request
                 );
 
         return ResponseEntity.ok(response);

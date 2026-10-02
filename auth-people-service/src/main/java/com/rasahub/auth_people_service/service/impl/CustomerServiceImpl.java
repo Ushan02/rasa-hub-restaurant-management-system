@@ -2,6 +2,7 @@ package com.rasahub.auth_people_service.service.impl;
 
 import com.rasahub.auth_people_service.dto.customer.CustomerCreateRequest;
 import com.rasahub.auth_people_service.dto.customer.CustomerResponse;
+import com.rasahub.auth_people_service.dto.customer.CustomerUpdateRequest;
 import com.rasahub.auth_people_service.entity.AuthAccount;
 import com.rasahub.auth_people_service.entity.Customer;
 import com.rasahub.auth_people_service.enums.Role;
@@ -76,15 +77,7 @@ public class CustomerServiceImpl implements CustomerService {
         Customer savedCustomer =
                 customerRepository.save(customer);
 
-        return new CustomerResponse(
-                savedCustomer.getId(),
-                savedCustomer.getFirstName(),
-                savedCustomer.getLastName(),
-                savedCustomer.getPhone(),
-                savedCustomer.getEmail(),
-                savedCustomer.isMarketingConsent(),
-                savedCustomer.getAuthAccount() != null
-        );
+        return toResponse(savedCustomer);
     }
 
     @Override
@@ -92,12 +85,77 @@ public class CustomerServiceImpl implements CustomerService {
     public CustomerResponse getMyProfile(Long accountId) {
 
         Customer customer =
-                customerRepository.findByAuthAccount_Id(accountId)
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Customer profile not found"
-                                )
-                        );
+                findCustomerByAccountId(accountId);
+
+        return toResponse(customer);
+    }
+
+    @Override
+    @Transactional
+    public CustomerResponse updateMyProfile(
+            Long accountId,
+            CustomerUpdateRequest request
+    ) {
+
+        Customer customer =
+                findCustomerByAccountId(accountId);
+
+        String firstName =
+                request.getFirstName().trim();
+
+        String lastName =
+                request.getLastName().trim();
+
+        String phone =
+                request.getPhone().trim();
+
+        String email =
+                request.getEmail().trim().toLowerCase();
+
+        if (customerRepository.existsByEmailAndIdNot(
+                email,
+                customer.getId()
+        )) {
+            throw new BusinessRuleException(
+                    "A customer with this email already exists"
+            );
+        }
+
+        if (customerRepository.existsByPhoneAndIdNot(
+                phone,
+                customer.getId()
+        )) {
+            throw new BusinessRuleException(
+                    "A customer with this phone number already exists"
+            );
+        }
+
+        customer.setFirstName(firstName);
+        customer.setLastName(lastName);
+        customer.setPhone(phone);
+        customer.setEmail(email);
+        customer.setMarketingConsent(
+                request.getMarketingConsent()
+        );
+
+        Customer savedCustomer =
+                customerRepository.save(customer);
+
+        return toResponse(savedCustomer);
+    }
+
+    private Customer findCustomerByAccountId(Long accountId) {
+
+        return customerRepository
+                .findByAuthAccount_Id(accountId)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException(
+                                "Customer profile not found"
+                        )
+                );
+    }
+
+    private CustomerResponse toResponse(Customer customer) {
 
         return new CustomerResponse(
                 customer.getId(),
