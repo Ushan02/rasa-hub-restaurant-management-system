@@ -1,6 +1,7 @@
 package com.rasahub.auth_people_service.service.impl;
 
 import com.rasahub.auth_people_service.dto.customer.CustomerCreateRequest;
+import com.rasahub.auth_people_service.dto.customer.CustomerPasswordChangeRequest;
 import com.rasahub.auth_people_service.dto.customer.CustomerResponse;
 import com.rasahub.auth_people_service.dto.customer.CustomerUpdateRequest;
 import com.rasahub.auth_people_service.entity.AuthAccount;
@@ -34,12 +35,23 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional
-    public CustomerResponse createCustomer(CustomerCreateRequest request) {
+    public CustomerResponse createCustomer(
+            CustomerCreateRequest request
+    ) {
 
-        String firstName = request.getFirstName().trim();
-        String lastName = request.getLastName().trim();
-        String phone = request.getPhone().trim();
-        String email = request.getEmail().trim().toLowerCase();
+        String firstName =
+                request.getFirstName().trim();
+
+        String lastName =
+                request.getLastName().trim();
+
+        String phone =
+                request.getPhone().trim();
+
+        String email =
+                request.getEmail()
+                        .trim()
+                        .toLowerCase();
 
         if (customerRepository.existsByEmail(email)) {
             throw new BusinessRuleException(
@@ -54,19 +66,26 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         String encodedPassword =
-                passwordEncoder.encode(request.getPassword());
+                passwordEncoder.encode(
+                        request.getPassword()
+                );
 
         AuthAccount authAccount =
-                new AuthAccount(encodedPassword, Role.CUSTOMER);
+                new AuthAccount(
+                        encodedPassword,
+                        Role.CUSTOMER
+                );
 
-        authAccount = authAccountRepository.save(authAccount);
+        authAccount =
+                authAccountRepository.save(authAccount);
 
-        Customer customer = new Customer(
-                firstName,
-                lastName,
-                phone,
-                email
-        );
+        Customer customer =
+                new Customer(
+                        firstName,
+                        lastName,
+                        phone,
+                        email
+                );
 
         customer.setMarketingConsent(
                 request.isMarketingConsent()
@@ -82,7 +101,9 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional(readOnly = true)
-    public CustomerResponse getMyProfile(Long accountId) {
+    public CustomerResponse getMyProfile(
+            Long accountId
+    ) {
 
         Customer customer =
                 findCustomerByAccountId(accountId);
@@ -110,7 +131,9 @@ public class CustomerServiceImpl implements CustomerService {
                 request.getPhone().trim();
 
         String email =
-                request.getEmail().trim().toLowerCase();
+                request.getEmail()
+                        .trim()
+                        .toLowerCase();
 
         if (customerRepository.existsByEmailAndIdNot(
                 email,
@@ -134,6 +157,7 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setLastName(lastName);
         customer.setPhone(phone);
         customer.setEmail(email);
+
         customer.setMarketingConsent(
                 request.getMarketingConsent()
         );
@@ -144,7 +168,60 @@ public class CustomerServiceImpl implements CustomerService {
         return toResponse(savedCustomer);
     }
 
-    private Customer findCustomerByAccountId(Long accountId) {
+    @Override
+    @Transactional
+    public void changePassword(
+            Long accountId,
+            CustomerPasswordChangeRequest request
+    ) {
+
+        AuthAccount authAccount =
+                authAccountRepository.findById(accountId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Account not found"
+                                )
+                        );
+
+        boolean currentPasswordMatches =
+                passwordEncoder.matches(
+                        request.getCurrentPassword(),
+                        authAccount.getPasswordHash()
+                );
+
+        if (!currentPasswordMatches) {
+            throw new BusinessRuleException(
+                    "Current password is incorrect"
+            );
+        }
+
+        boolean newPasswordSameAsCurrent =
+                passwordEncoder.matches(
+                        request.getNewPassword(),
+                        authAccount.getPasswordHash()
+                );
+
+        if (newPasswordSameAsCurrent) {
+            throw new BusinessRuleException(
+                    "New password must be different from the current password"
+            );
+        }
+
+        String encodedNewPassword =
+                passwordEncoder.encode(
+                        request.getNewPassword()
+                );
+
+        authAccount.setPasswordHash(
+                encodedNewPassword
+        );
+
+        authAccountRepository.save(authAccount);
+    }
+
+    private Customer findCustomerByAccountId(
+            Long accountId
+    ) {
 
         return customerRepository
                 .findByAuthAccount_Id(accountId)
@@ -155,7 +232,9 @@ public class CustomerServiceImpl implements CustomerService {
                 );
     }
 
-    private CustomerResponse toResponse(Customer customer) {
+    private CustomerResponse toResponse(
+            Customer customer
+    ) {
 
         return new CustomerResponse(
                 customer.getId(),

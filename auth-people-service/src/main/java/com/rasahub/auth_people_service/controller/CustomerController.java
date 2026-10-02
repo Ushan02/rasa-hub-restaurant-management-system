@@ -1,6 +1,7 @@
 package com.rasahub.auth_people_service.controller;
 
 import com.rasahub.auth_people_service.dto.customer.CustomerCreateRequest;
+import com.rasahub.auth_people_service.dto.customer.CustomerPasswordChangeRequest;
 import com.rasahub.auth_people_service.dto.customer.CustomerResponse;
 import com.rasahub.auth_people_service.dto.customer.CustomerUpdateRequest;
 import com.rasahub.auth_people_service.security.CustomUserPrincipal;
@@ -18,7 +19,9 @@ public class CustomerController {
 
     private final CustomerService customerService;
 
-    public CustomerController(CustomerService customerService) {
+    public CustomerController(
+            CustomerService customerService
+    ) {
         this.customerService = customerService;
     }
 
@@ -63,5 +66,22 @@ public class CustomerController {
                 );
 
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/me/password")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<Void> changePassword(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody CustomerPasswordChangeRequest request
+    ) {
+
+        customerService.changePassword(
+                principal.getAccountId(),
+                request
+        );
+
+        return ResponseEntity
+                .noContent()
+                .build();
     }
 }
