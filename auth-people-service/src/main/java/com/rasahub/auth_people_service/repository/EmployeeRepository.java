@@ -9,21 +9,41 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.Optional;
 
-public interface EmployeeRepository extends JpaRepository<Employee, Long> {
+public interface EmployeeRepository
+        extends JpaRepository<Employee, Long> {
 
-    Optional<Employee> findByEmployeeId(String employeeId);
+    Optional<Employee> findByEmployeeId(
+            String employeeId
+    );
 
-    Optional<Employee> findByNic(String nic);
+    Optional<Employee> findByNic(
+            String nic
+    );
 
-    boolean existsByEmployeeId(String employeeId);
+    boolean existsByEmployeeId(
+            String employeeId
+    );
 
-    boolean existsByNic(String nic);
+    boolean existsByNic(
+            String nic
+    );
 
-    boolean existsByEmail(String email);
+    boolean existsByNicAndIdNot(
+            String nic,
+            Long id
+    );
 
-    boolean existsByPhone(String phone);
+    boolean existsByEmail(
+            String email
+    );
 
-    List<Employee> findByBranch_Id(Long branchId);
+    boolean existsByPhone(
+            String phone
+    );
+
+    List<Employee> findByBranch_Id(
+            Long branchId
+    );
 
     List<Employee> findByBranch_IdAndEmploymentStatus(
             Long branchId,

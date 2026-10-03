@@ -2,6 +2,7 @@ package com.rasahub.auth_people_service.controller;
 
 import com.rasahub.auth_people_service.dto.employee.EmployeeCreateRequest;
 import com.rasahub.auth_people_service.dto.employee.EmployeeResponse;
+import com.rasahub.auth_people_service.dto.employee.EmployeeUpdateRequest;
 import com.rasahub.auth_people_service.enums.Role;
 import com.rasahub.auth_people_service.security.CustomUserPrincipal;
 import com.rasahub.auth_people_service.service.EmployeeService;
@@ -29,21 +30,25 @@ public class EmployeeController {
         this.employeeService = employeeService;
     }
 
-    // =========================================================
     // CREATE EMPLOYEE
-    // =========================================================
+
 
     @PostMapping
     @PreAuthorize(
             "hasAnyRole('OWNER','MAIN_OFFICE_MANAGER','ACCOUNTANT')"
     )
     public ResponseEntity<EmployeeResponse> createEmployee(
-            @Valid @RequestBody EmployeeCreateRequest request,
+            @Valid
+            @RequestBody
+            EmployeeCreateRequest request,
+
             Authentication authentication
     ) {
 
         Role callerRole =
-                extractRole(authentication);
+                extractRole(
+                        authentication
+                );
 
         EmployeeResponse response =
                 employeeService.createEmployee(
@@ -56,9 +61,7 @@ public class EmployeeController {
                 .body(response);
     }
 
-    // =========================================================
     // GET EMPLOYEE LIST
-    // =========================================================
 
     @GetMapping
     @PreAuthorize(
@@ -66,12 +69,18 @@ public class EmployeeController {
     )
     public ResponseEntity<List<EmployeeResponse>> getEmployees(
             Authentication authentication,
-            @AuthenticationPrincipal CustomUserPrincipal principal,
-            @RequestParam(required = false) Long branchId
+
+            @AuthenticationPrincipal
+            CustomUserPrincipal principal,
+
+            @RequestParam(required = false)
+            Long branchId
     ) {
 
         Role callerRole =
-                extractRole(authentication);
+                extractRole(
+                        authentication
+                );
 
         List<EmployeeResponse> employees =
                 employeeService.getEmployees(
@@ -85,22 +94,26 @@ public class EmployeeController {
         );
     }
 
-    // =========================================================
     // GET SINGLE EMPLOYEE
-    // =========================================================
 
     @GetMapping("/{id}")
     @PreAuthorize(
             "hasAnyRole('OWNER','MAIN_OFFICE_MANAGER','ACCOUNTANT','BRANCH_MANAGER')"
     )
     public ResponseEntity<EmployeeResponse> getEmployeeById(
-            @PathVariable Long id,
+            @PathVariable
+            Long id,
+
             Authentication authentication,
-            @AuthenticationPrincipal CustomUserPrincipal principal
+
+            @AuthenticationPrincipal
+            CustomUserPrincipal principal
     ) {
 
         Role callerRole =
-                extractRole(authentication);
+                extractRole(
+                        authentication
+                );
 
         EmployeeResponse response =
                 employeeService.getEmployeeById(
@@ -114,9 +127,47 @@ public class EmployeeController {
         );
     }
 
-    // =========================================================
-    // HELPER
-    // =========================================================
+    // UPDATE EMPLOYEE
+
+
+    @PutMapping("/{id}")
+    @PreAuthorize(
+            "hasAnyRole('OWNER','MAIN_OFFICE_MANAGER','ACCOUNTANT')"
+    )
+    public ResponseEntity<EmployeeResponse> updateEmployee(
+            @PathVariable
+            Long id,
+
+            @Valid
+            @RequestBody
+            EmployeeUpdateRequest request,
+
+            Authentication authentication,
+
+            @AuthenticationPrincipal
+            CustomUserPrincipal principal
+    ) {
+
+        Role callerRole =
+                extractRole(
+                        authentication
+                );
+
+        EmployeeResponse response =
+                employeeService.updateEmployee(
+                        id,
+                        request,
+                        callerRole,
+                        principal.getAccountId()
+                );
+
+        return ResponseEntity.ok(
+                response
+        );
+    }
+
+
+    // ROLE HELPER
 
     private Role extractRole(
             Authentication authentication
