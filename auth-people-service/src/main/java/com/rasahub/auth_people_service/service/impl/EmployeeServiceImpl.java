@@ -2,12 +2,15 @@ package com.rasahub.auth_people_service.service.impl;
 
 import com.rasahub.auth_people_service.dto.employee.EmployeeCreateRequest;
 import com.rasahub.auth_people_service.dto.employee.EmployeeResponse;
+import com.rasahub.auth_people_service.dto.employee.EmployeeStatusUpdateRequest;
 import com.rasahub.auth_people_service.dto.employee.EmployeeUpdateRequest;
 import com.rasahub.auth_people_service.entity.AuthAccount;
 import com.rasahub.auth_people_service.entity.Branch;
 import com.rasahub.auth_people_service.entity.Employee;
 import com.rasahub.auth_people_service.entity.EmployeeUpdateAudit;
+import com.rasahub.auth_people_service.enums.AccountStatus;
 import com.rasahub.auth_people_service.enums.EmployeePosition;
+import com.rasahub.auth_people_service.enums.EmploymentStatus;
 import com.rasahub.auth_people_service.enums.Role;
 import com.rasahub.auth_people_service.exception.BusinessRuleException;
 import com.rasahub.auth_people_service.exception.ResourceNotFoundException;
@@ -58,8 +61,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.employeeRepository = employeeRepository;
         this.branchRepository = branchRepository;
         this.authAccountRepository = authAccountRepository;
-        this.employeeUpdateAuditRepository =
-                employeeUpdateAuditRepository;
+        this.employeeUpdateAuditRepository = employeeUpdateAuditRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -94,9 +96,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         Branch branch =
                 branchRepository
-                        .findById(
-                                request.getBranchId()
-                        )
+                        .findById(request.getBranchId())
                         .orElseThrow(() ->
                                 new BusinessRuleException(
                                         "Branch not found"
@@ -104,8 +104,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                         );
 
         String nic =
-                request
-                        .getNic()
+                request.getNic()
                         .trim()
                         .toUpperCase();
 
@@ -157,9 +156,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
             Role role =
                     Role.valueOf(
-                            request
-                                    .getPosition()
-                                    .name()
+                            request.getPosition().name()
                     );
 
             String hashedPassword =
@@ -204,9 +201,8 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-    // =========================================================
+
     // GET EMPLOYEE LIST
-    // =========================================================
 
     @Override
     @Transactional(readOnly = true)
@@ -216,8 +212,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             Long requestedBranchId
     ) {
 
-        // BRANCH MANAGER
-        // Can view only own branch
+
         if (callerRole == Role.BRANCH_MANAGER) {
 
             Employee branchManager =
@@ -249,7 +244,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .toList();
         }
 
-        // OWNER / MAIN OFFICE MANAGER / ACCOUNTANT
+
         if (callerRole == Role.OWNER
                 || callerRole == Role.MAIN_OFFICE_MANAGER
                 || callerRole == Role.ACCOUNTANT) {
@@ -291,9 +286,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-    // =========================================================
-    // GET SINGLE EMPLOYEE
-    // =========================================================
+
 
     @Override
     @Transactional(readOnly = true)
@@ -307,6 +300,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 findEmployeeById(
                         employeeId
                 );
+
 
         if (callerRole == Role.BRANCH_MANAGER) {
 
@@ -353,9 +347,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-    // =========================================================
-    // UPDATE EMPLOYEE
-    // =========================================================
 
     @Override
     @Transactional
@@ -366,28 +357,26 @@ public class EmployeeServiceImpl implements EmployeeService {
             Long callerAccountId
     ) {
 
-        // Target employee
+
         Employee targetEmployee =
                 findEmployeeById(
                         employeeId
                 );
 
-        // Logged-in employee
-        // This identity comes from JWT accountId
+
         Employee updatedByEmployee =
                 findEmployeeByAccountId(
                         callerAccountId
                 );
 
-        // Check whether caller can update target
+
         validateEmployeeUpdateAccess(
                 callerRole,
                 targetEmployee
         );
 
         String nic =
-                request
-                        .getNic()
+                request.getNic()
                         .trim()
                         .toUpperCase();
 
@@ -406,13 +395,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                         request.getPhone()
                 );
 
-        // Employee NIC must remain unique
-        // but current employee's own NIC is allowed
-        if (employeeRepository
-                .existsByNicAndIdNot(
-                        nic,
-                        targetEmployee.getId()
-                )) {
+
+        if (employeeRepository.existsByNicAndIdNot(
+                nic,
+                targetEmployee.getId()
+        )) {
 
             throw new BusinessRuleException(
                     "An employee with this NIC already exists"
@@ -439,8 +426,7 @@ public class EmployeeServiceImpl implements EmployeeService {
         boolean positionChanged =
                 currentPosition != requestedPosition;
 
-        // Only OWNER / MAIN_OFFICE_MANAGER
-        // can change position
+
         if (positionChanged) {
 
             validatePositionChange(
@@ -454,7 +440,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             );
         }
 
-        // employeeId is intentionally NOT changed
+
         targetEmployee.setFirstName(
                 request.getFirstName().trim()
         );
@@ -488,15 +474,9 @@ public class EmployeeServiceImpl implements EmployeeService {
                         targetEmployee
                 );
 
-        // Audit record
-        EmployeeUpdateAudit audit =
-                new EmployeeUpdateAudit(
-                        savedEmployee.getEmployeeId(),
-                        updatedByEmployee.getEmployeeId()
-                );
-
-        employeeUpdateAuditRepository.save(
-                audit
+        saveEmployeeUpdateAudit(
+                savedEmployee,
+                updatedByEmployee
         );
 
         return toResponse(
@@ -504,9 +484,113 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-    // =========================================================
-    // UPDATE AUTHORIZATION
-    // =========================================================
+
+
+    @Override
+    @Transactional
+    public EmployeeResponse updateEmployeeStatus(
+            Long employeeId,
+            EmployeeStatusUpdateRequest request,
+            Role callerRole,
+            Long callerAccountId
+    ) {
+
+
+        Employee targetEmployee =
+                findEmployeeById(
+                        employeeId
+                );
+
+
+        Employee callerEmployee =
+                findEmployeeByAccountId(
+                        callerAccountId
+                );
+
+
+        validateEmployeeStatusUpdateAccess(
+                callerRole,
+                targetEmployee
+        );
+
+        EmploymentStatus requestedStatus =
+                request.getStatus();
+
+
+        if (requestedStatus != EmploymentStatus.ACTIVE
+                && requestedStatus != EmploymentStatus.INACTIVE) {
+
+            throw new BusinessRuleException(
+                    "Employee status can only be ACTIVE or INACTIVE"
+            );
+        }
+
+
+        if (callerEmployee.getId().equals(
+                targetEmployee.getId()
+        )
+                && requestedStatus == EmploymentStatus.INACTIVE) {
+
+            throw new BusinessRuleException(
+                    "You cannot deactivate your own employee account"
+            );
+        }
+
+
+        if (targetEmployee.getEmploymentStatus()
+                == requestedStatus) {
+
+            throw new BusinessRuleException(
+                    "Employee already has this employment status"
+            );
+        }
+
+
+        targetEmployee.setEmploymentStatus(
+                requestedStatus
+        );
+
+
+        AuthAccount authAccount =
+                targetEmployee.getAuthAccount();
+
+        if (authAccount != null) {
+
+            if (requestedStatus == EmploymentStatus.ACTIVE) {
+
+                authAccount.setStatus(
+                        AccountStatus.ACTIVE
+                );
+
+            } else {
+
+                authAccount.setStatus(
+                        AccountStatus.INACTIVE
+                );
+            }
+
+            authAccountRepository.save(
+                    authAccount
+            );
+        }
+
+        Employee savedEmployee =
+                employeeRepository.save(
+                        targetEmployee
+                );
+
+
+        saveEmployeeUpdateAudit(
+                savedEmployee,
+                callerEmployee
+        );
+
+        return toResponse(
+                savedEmployee
+        );
+    }
+
+
 
     private void validateEmployeeUpdateAccess(
             Role callerRole,
@@ -516,13 +600,11 @@ public class EmployeeServiceImpl implements EmployeeService {
         EmployeePosition targetPosition =
                 targetEmployee.getPosition();
 
-        // OWNER can update anyone
+
         if (callerRole == Role.OWNER) {
             return;
         }
 
-        // MAIN OFFICE MANAGER
-        // Can update everyone except OWNER
         if (callerRole == Role.MAIN_OFFICE_MANAGER) {
 
             if (targetPosition == EmployeePosition.OWNER) {
@@ -535,8 +617,7 @@ public class EmployeeServiceImpl implements EmployeeService {
             return;
         }
 
-        // ACCOUNTANT
-        // Cannot update OWNER or MAIN OFFICE MANAGER
+
         if (callerRole == Role.ACCOUNTANT) {
 
             if (targetPosition == EmployeePosition.OWNER
@@ -556,22 +637,65 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-    // =========================================================
-    // POSITION / ROLE CHANGE AUTHORIZATION
-    // =========================================================
+
+    private void validateEmployeeStatusUpdateAccess(
+            Role callerRole,
+            Employee targetEmployee
+    ) {
+
+        EmployeePosition targetPosition =
+                targetEmployee.getPosition();
+
+
+        if (callerRole == Role.OWNER) {
+            return;
+        }
+
+
+        if (callerRole == Role.MAIN_OFFICE_MANAGER) {
+
+            if (targetPosition == EmployeePosition.OWNER) {
+
+                throw new AccessDeniedException(
+                        "Main Office Manager cannot change Owner status"
+                );
+            }
+
+            return;
+        }
+
+
+        if (callerRole == Role.ACCOUNTANT) {
+
+            if (targetPosition == EmployeePosition.OWNER
+                    || targetPosition ==
+                    EmployeePosition.MAIN_OFFICE_MANAGER) {
+
+                throw new AccessDeniedException(
+                        "Accountant cannot change Owner or Main Office Manager status"
+                );
+            }
+
+            return;
+        }
+
+        throw new AccessDeniedException(
+                "Not allowed to change employee status"
+        );
+    }
+
 
     private void validatePositionChange(
             Role callerRole,
             EmployeePosition requestedPosition
     ) {
 
-        // OWNER can change positions
+
         if (callerRole == Role.OWNER) {
             return;
         }
 
-        // MAIN OFFICE MANAGER
-        // can change positions but cannot assign OWNER
+
         if (callerRole == Role.MAIN_OFFICE_MANAGER) {
 
             if (requestedPosition == EmployeePosition.OWNER) {
@@ -584,15 +708,13 @@ public class EmployeeServiceImpl implements EmployeeService {
             return;
         }
 
-        // ACCOUNTANT cannot change position
+
         throw new AccessDeniedException(
                 "Only Owner or Main Office Manager can change employee position"
         );
     }
 
-    // =========================================================
-    // POSITION + AUTH ACCOUNT ROLE SYNC
-    // =========================================================
+
 
     private void updateEmployeePosition(
             Employee employee,
@@ -602,14 +724,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         AuthAccount authAccount =
                 employee.getAuthAccount();
 
-        /*
-         * If this employee already has a login account,
-         * we do not directly change them to WAITER/CHEF/
-         * DELIVERY_PERSON.
-         *
-         * Account disabling/removal will be handled
-         * separately in account-management functionality.
-         */
         if (authAccount != null
                 && NON_LOGIN_POSITIONS.contains(
                 requestedPosition
@@ -624,11 +738,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 requestedPosition
         );
 
-        /*
-         * If employee has login account,
-         * Employee.position and AuthAccount.role
-         * must remain synchronized.
-         */
+
         if (authAccount != null) {
 
             Role newRole =
@@ -646,9 +756,24 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
     }
 
-    // =========================================================
-    // HELPER METHODS
-    // =========================================================
+
+    private void saveEmployeeUpdateAudit(
+            Employee targetEmployee,
+            Employee updatedByEmployee
+    ) {
+
+        EmployeeUpdateAudit audit =
+                new EmployeeUpdateAudit(
+                        targetEmployee.getEmployeeId(),
+                        updatedByEmployee.getEmployeeId()
+                );
+
+        employeeUpdateAuditRepository.save(
+                audit
+        );
+    }
+
+
 
     private Employee findEmployeeById(
             Long employeeId
@@ -665,6 +790,7 @@ public class EmployeeServiceImpl implements EmployeeService {
                 );
     }
 
+
     private Employee findEmployeeByAccountId(
             Long accountId
     ) {
@@ -680,6 +806,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 );
     }
 
+
+
     private String generateNextEmployeeId() {
 
         Long nextValue =
@@ -691,6 +819,8 @@ public class EmployeeServiceImpl implements EmployeeService {
                 nextValue
         );
     }
+
+
 
     private String normalizeOptional(
             String value
@@ -704,6 +834,8 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         return value.trim();
     }
+
+
 
     private EmployeeResponse toResponse(
             Employee employee
