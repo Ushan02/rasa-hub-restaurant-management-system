@@ -61,13 +61,10 @@ public class EmployeeServiceImpl implements EmployeeService {
         this.employeeRepository = employeeRepository;
         this.branchRepository = branchRepository;
         this.authAccountRepository = authAccountRepository;
-        this.employeeUpdateAuditRepository = employeeUpdateAuditRepository;
+        this.employeeUpdateAuditRepository =
+                employeeUpdateAuditRepository;
         this.passwordEncoder = passwordEncoder;
     }
-
-    // =========================================================
-    // CREATE EMPLOYEE
-    // =========================================================
 
     @Override
     @Transactional
@@ -95,13 +92,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         Branch branch =
-                branchRepository
-                        .findById(request.getBranchId())
-                        .orElseThrow(() ->
-                                new BusinessRuleException(
-                                        "Branch not found"
-                                )
-                        );
+                findActiveBranchById(
+                        request.getBranchId()
+                );
 
         String nic =
                 request.getNic()
@@ -201,9 +194,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-    // GET EMPLOYEE LIST
-
     @Override
     @Transactional(readOnly = true)
     public List<EmployeeResponse> getEmployees(
@@ -211,7 +201,6 @@ public class EmployeeServiceImpl implements EmployeeService {
             Long callerAccountId,
             Long requestedBranchId
     ) {
-
 
         if (callerRole == Role.BRANCH_MANAGER) {
 
@@ -243,7 +232,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                     .map(this::toResponse)
                     .toList();
         }
-
 
         if (callerRole == Role.OWNER
                 || callerRole == Role.MAIN_OFFICE_MANAGER
@@ -286,8 +274,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-
     @Override
     @Transactional(readOnly = true)
     public EmployeeResponse getEmployeeById(
@@ -300,7 +286,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                 findEmployeeById(
                         employeeId
                 );
-
 
         if (callerRole == Role.BRANCH_MANAGER) {
 
@@ -347,7 +332,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
     @Override
     @Transactional
     public EmployeeResponse updateEmployee(
@@ -357,18 +341,15 @@ public class EmployeeServiceImpl implements EmployeeService {
             Long callerAccountId
     ) {
 
-
         Employee targetEmployee =
                 findEmployeeById(
                         employeeId
                 );
 
-
         Employee updatedByEmployee =
                 findEmployeeByAccountId(
                         callerAccountId
                 );
-
 
         validateEmployeeUpdateAccess(
                 callerRole,
@@ -395,11 +376,11 @@ public class EmployeeServiceImpl implements EmployeeService {
                         request.getPhone()
                 );
 
-
-        if (employeeRepository.existsByNicAndIdNot(
-                nic,
-                targetEmployee.getId()
-        )) {
+        if (employeeRepository
+                .existsByNicAndIdNot(
+                        nic,
+                        targetEmployee.getId()
+                )) {
 
             throw new BusinessRuleException(
                     "An employee with this NIC already exists"
@@ -407,15 +388,9 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
 
         Branch branch =
-                branchRepository
-                        .findById(
-                                request.getBranchId()
-                        )
-                        .orElseThrow(() ->
-                                new ResourceNotFoundException(
-                                        "Branch not found"
-                                )
-                        );
+                findActiveBranchById(
+                        request.getBranchId()
+                );
 
         EmployeePosition currentPosition =
                 targetEmployee.getPosition();
@@ -425,7 +400,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         boolean positionChanged =
                 currentPosition != requestedPosition;
-
 
         if (positionChanged) {
 
@@ -439,7 +413,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                     requestedPosition
             );
         }
-
 
         targetEmployee.setFirstName(
                 request.getFirstName().trim()
@@ -484,8 +457,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-
     @Override
     @Transactional
     public EmployeeResponse updateEmployeeStatus(
@@ -495,18 +466,15 @@ public class EmployeeServiceImpl implements EmployeeService {
             Long callerAccountId
     ) {
 
-
         Employee targetEmployee =
                 findEmployeeById(
                         employeeId
                 );
 
-
         Employee callerEmployee =
                 findEmployeeByAccountId(
                         callerAccountId
                 );
-
 
         validateEmployeeStatusUpdateAccess(
                 callerRole,
@@ -516,7 +484,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         EmploymentStatus requestedStatus =
                 request.getStatus();
 
-
         if (requestedStatus != EmploymentStatus.ACTIVE
                 && requestedStatus != EmploymentStatus.INACTIVE) {
 
@@ -525,17 +492,16 @@ public class EmployeeServiceImpl implements EmployeeService {
             );
         }
 
-
         if (callerEmployee.getId().equals(
                 targetEmployee.getId()
         )
-                && requestedStatus == EmploymentStatus.INACTIVE) {
+                && requestedStatus ==
+                EmploymentStatus.INACTIVE) {
 
             throw new BusinessRuleException(
                     "You cannot deactivate your own employee account"
             );
         }
-
 
         if (targetEmployee.getEmploymentStatus()
                 == requestedStatus) {
@@ -545,18 +511,17 @@ public class EmployeeServiceImpl implements EmployeeService {
             );
         }
 
-
         targetEmployee.setEmploymentStatus(
                 requestedStatus
         );
-
 
         AuthAccount authAccount =
                 targetEmployee.getAuthAccount();
 
         if (authAccount != null) {
 
-            if (requestedStatus == EmploymentStatus.ACTIVE) {
+            if (requestedStatus ==
+                    EmploymentStatus.ACTIVE) {
 
                 authAccount.setStatus(
                         AccountStatus.ACTIVE
@@ -579,7 +544,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                         targetEmployee
                 );
 
-
         saveEmployeeUpdateAudit(
                 savedEmployee,
                 callerEmployee
@@ -590,8 +554,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-
     private void validateEmployeeUpdateAccess(
             Role callerRole,
             Employee targetEmployee
@@ -600,14 +562,15 @@ public class EmployeeServiceImpl implements EmployeeService {
         EmployeePosition targetPosition =
                 targetEmployee.getPosition();
 
-
         if (callerRole == Role.OWNER) {
             return;
         }
 
-        if (callerRole == Role.MAIN_OFFICE_MANAGER) {
+        if (callerRole ==
+                Role.MAIN_OFFICE_MANAGER) {
 
-            if (targetPosition == EmployeePosition.OWNER) {
+            if (targetPosition ==
+                    EmployeePosition.OWNER) {
 
                 throw new AccessDeniedException(
                         "Main Office Manager cannot update an Owner"
@@ -617,10 +580,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             return;
         }
 
-
         if (callerRole == Role.ACCOUNTANT) {
 
-            if (targetPosition == EmployeePosition.OWNER
+            if (targetPosition ==
+                    EmployeePosition.OWNER
                     || targetPosition ==
                     EmployeePosition.MAIN_OFFICE_MANAGER) {
 
@@ -637,7 +600,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
     private void validateEmployeeStatusUpdateAccess(
             Role callerRole,
             Employee targetEmployee
@@ -646,15 +608,15 @@ public class EmployeeServiceImpl implements EmployeeService {
         EmployeePosition targetPosition =
                 targetEmployee.getPosition();
 
-
         if (callerRole == Role.OWNER) {
             return;
         }
 
+        if (callerRole ==
+                Role.MAIN_OFFICE_MANAGER) {
 
-        if (callerRole == Role.MAIN_OFFICE_MANAGER) {
-
-            if (targetPosition == EmployeePosition.OWNER) {
+            if (targetPosition ==
+                    EmployeePosition.OWNER) {
 
                 throw new AccessDeniedException(
                         "Main Office Manager cannot change Owner status"
@@ -664,10 +626,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             return;
         }
 
-
         if (callerRole == Role.ACCOUNTANT) {
 
-            if (targetPosition == EmployeePosition.OWNER
+            if (targetPosition ==
+                    EmployeePosition.OWNER
                     || targetPosition ==
                     EmployeePosition.MAIN_OFFICE_MANAGER) {
 
@@ -684,21 +646,20 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
     private void validatePositionChange(
             Role callerRole,
             EmployeePosition requestedPosition
     ) {
 
-
         if (callerRole == Role.OWNER) {
             return;
         }
 
+        if (callerRole ==
+                Role.MAIN_OFFICE_MANAGER) {
 
-        if (callerRole == Role.MAIN_OFFICE_MANAGER) {
-
-            if (requestedPosition == EmployeePosition.OWNER) {
+            if (requestedPosition ==
+                    EmployeePosition.OWNER) {
 
                 throw new AccessDeniedException(
                         "Main Office Manager cannot assign the Owner position"
@@ -708,13 +669,10 @@ public class EmployeeServiceImpl implements EmployeeService {
             return;
         }
 
-
         throw new AccessDeniedException(
                 "Only Owner or Main Office Manager can change employee position"
         );
     }
-
-
 
     private void updateEmployeePosition(
             Employee employee,
@@ -738,7 +696,6 @@ public class EmployeeServiceImpl implements EmployeeService {
                 requestedPosition
         );
 
-
         if (authAccount != null) {
 
             Role newRole =
@@ -756,7 +713,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         }
     }
 
-
     private void saveEmployeeUpdateAudit(
             Employee targetEmployee,
             Employee updatedByEmployee
@@ -773,23 +729,18 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-
     private Employee findEmployeeById(
             Long employeeId
     ) {
 
         return employeeRepository
-                .findById(
-                        employeeId
-                )
+                .findById(employeeId)
                 .orElseThrow(() ->
                         new ResourceNotFoundException(
                                 "Employee not found"
                         )
                 );
     }
-
 
     private Employee findEmployeeByAccountId(
             Long accountId
@@ -806,7 +757,28 @@ public class EmployeeServiceImpl implements EmployeeService {
                 );
     }
 
+    private Branch findActiveBranchById(
+            Long branchId
+    ) {
 
+        Branch branch =
+                branchRepository
+                        .findById(branchId)
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Branch not found"
+                                )
+                        );
+
+        if (!branch.isActive()) {
+
+            throw new BusinessRuleException(
+                    "Cannot assign an employee to an inactive branch"
+            );
+        }
+
+        return branch;
+    }
 
     private String generateNextEmployeeId() {
 
@@ -820,8 +792,6 @@ public class EmployeeServiceImpl implements EmployeeService {
         );
     }
 
-
-
     private String normalizeOptional(
             String value
     ) {
@@ -834,8 +804,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         return value.trim();
     }
-
-
 
     private EmployeeResponse toResponse(
             Employee employee
