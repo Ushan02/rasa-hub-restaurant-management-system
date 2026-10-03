@@ -26,10 +26,12 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public AuthServiceImpl(EmployeeRepository employeeRepository,
-                           CustomerRepository customerRepository,
-                           PasswordEncoder passwordEncoder,
-                           JwtService jwtService) {
+    public AuthServiceImpl(
+            EmployeeRepository employeeRepository,
+            CustomerRepository customerRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService
+    ) {
         this.employeeRepository = employeeRepository;
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
@@ -38,45 +40,99 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public LoginResponse loginStaff(LoginRequest request) {
-        Employee employee = employeeRepository.findByEmployeeId(request.getIdentifier())
-                .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS));
 
-        AuthAccount account = employee.getAuthAccount();
+        String employeeId =
+                request.getIdentifier()
+                        .trim()
+                        .toUpperCase();
 
-        return authenticate(account, request.getPassword());
+        Employee employee =
+                employeeRepository
+                        .findByEmployeeId(employeeId)
+                        .orElseThrow(() ->
+                                new BadCredentialsException(
+                                        INVALID_CREDENTIALS
+                                )
+                        );
+
+        AuthAccount account =
+                employee.getAuthAccount();
+
+        return authenticate(
+                account,
+                request.getPassword()
+        );
     }
 
     @Override
     public LoginResponse loginCustomer(LoginRequest request) {
-        String identifier = request.getIdentifier();
 
-        Customer customer = customerRepository.findByPhone(identifier)
-                .or(() -> customerRepository.findByEmail(identifier))
-                .orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS));
+        String identifier =
+                request.getIdentifier()
+                        .trim();
 
-        AuthAccount account = customer.getAuthAccount();
+        Customer customer =
+                customerRepository
+                        .findByPhone(identifier)
+                        .or(() ->
+                                customerRepository.findByEmail(
+                                        identifier.toLowerCase()
+                                )
+                        )
+                        .orElseThrow(() ->
+                                new BadCredentialsException(
+                                        INVALID_CREDENTIALS
+                                )
+                        );
 
-        return authenticate(account, request.getPassword());
+        AuthAccount account =
+                customer.getAuthAccount();
+
+        return authenticate(
+                account,
+                request.getPassword()
+        );
     }
 
-    private LoginResponse authenticate(AuthAccount account, String rawPassword) {
+    private LoginResponse authenticate(
+            AuthAccount account,
+            String rawPassword
+    ) {
+
         if (account == null) {
-            throw new BadCredentialsException(INVALID_CREDENTIALS);
+            throw new BadCredentialsException(
+                    INVALID_CREDENTIALS
+            );
         }
 
         if (account.getStatus() != AccountStatus.ACTIVE) {
-            throw new BadCredentialsException(INVALID_CREDENTIALS);
+            throw new BadCredentialsException(
+                    INVALID_CREDENTIALS
+            );
         }
 
-        if (!passwordEncoder.matches(rawPassword, account.getPasswordHash())) {
-            throw new BadCredentialsException(INVALID_CREDENTIALS);
+        if (!passwordEncoder.matches(
+                rawPassword,
+                account.getPasswordHash()
+        )) {
+            throw new BadCredentialsException(
+                    INVALID_CREDENTIALS
+            );
         }
 
-        String token = jwtService.generateToken(
-                account.getId().toString(),
-                Map.of("role", account.getRole().name())
+        String token =
+                jwtService.generateToken(
+                        account.getId().toString(),
+                        Map.of(
+                                "role",
+                                account.getRole().name()
+                        )
+                );
+
+        return new LoginResponse(
+                token,
+                account.getRole(),
+                account.getId()
         );
-
-        return new LoginResponse(token, account.getRole(), account.getId());
     }
 }

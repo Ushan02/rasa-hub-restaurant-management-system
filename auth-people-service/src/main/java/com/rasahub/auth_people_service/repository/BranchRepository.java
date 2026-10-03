@@ -10,11 +10,17 @@ import java.util.Optional;
 public interface BranchRepository
         extends JpaRepository<Branch, Long> {
 
-    Optional<Branch> findByBranchCode(String branchCode);
+    Optional<Branch> findByBranchCodeIgnoreCase(
+            String branchCode
+    );
 
-    boolean existsByBranchCode(String branchCode);
+    boolean existsByBranchCode(
+            String branchCode
+    );
 
-    boolean existsByNameIgnoreCase(String name);
+    boolean existsByNameIgnoreCase(
+            String name
+    );
 
     boolean existsByNameIgnoreCaseAndIdNot(
             String name,

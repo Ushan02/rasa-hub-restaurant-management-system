@@ -26,6 +26,12 @@ public interface BranchService {
             Long callerAccountId
     );
 
+    BranchResponse getBranchByCode(
+            String branchCode,
+            Role callerRole,
+            Long callerAccountId
+    );
+
     BranchResponse updateBranch(
             Long id,
             BranchUpdateRequest request

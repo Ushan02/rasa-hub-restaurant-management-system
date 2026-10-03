@@ -66,19 +66,39 @@ public class BranchController {
     ) {
 
         Role callerRole =
-                extractRole(
-                        authentication
-                );
+                extractRole(authentication);
 
-        List<BranchResponse> response =
+        return ResponseEntity.ok(
                 branchService.getBranches(
                         active,
                         callerRole,
                         principal.getAccountId()
-                );
+                )
+        );
+    }
+
+    @GetMapping("/by-code/{branchCode}")
+    @PreAuthorize(
+            "hasAnyRole('OWNER','MAIN_OFFICE_MANAGER','ACCOUNTANT','BRANCH_MANAGER')"
+    )
+    public ResponseEntity<BranchResponse> getBranchByCode(
+            @PathVariable String branchCode,
+
+            Authentication authentication,
+
+            @AuthenticationPrincipal
+            CustomUserPrincipal principal
+    ) {
+
+        Role callerRole =
+                extractRole(authentication);
 
         return ResponseEntity.ok(
-                response
+                branchService.getBranchByCode(
+                        branchCode,
+                        callerRole,
+                        principal.getAccountId()
+                )
         );
     }
 
@@ -96,19 +116,14 @@ public class BranchController {
     ) {
 
         Role callerRole =
-                extractRole(
-                        authentication
-                );
+                extractRole(authentication);
 
-        BranchResponse response =
+        return ResponseEntity.ok(
                 branchService.getBranchById(
                         id,
                         callerRole,
                         principal.getAccountId()
-                );
-
-        return ResponseEntity.ok(
-                response
+                )
         );
     }
 
@@ -161,9 +176,7 @@ public class BranchController {
                         GrantedAuthority::getAuthority
                 )
                 .filter(authority ->
-                        authority.startsWith(
-                                "ROLE_"
-                        )
+                        authority.startsWith("ROLE_")
                 )
                 .map(authority ->
                         Role.valueOf(

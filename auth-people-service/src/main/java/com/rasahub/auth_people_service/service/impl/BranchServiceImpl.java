@@ -49,19 +49,13 @@ public class BranchServiceImpl implements BranchService {
                 request.getName()
                         .trim();
 
-        if (branchRepository.existsByBranchCode(
-                branchCode
-        )) {
-
+        if (branchRepository.existsByBranchCode(branchCode)) {
             throw new BusinessRuleException(
                     "A branch with this branch code already exists"
             );
         }
 
-        if (branchRepository.existsByNameIgnoreCase(
-                name
-        )) {
-
+        if (branchRepository.existsByNameIgnoreCase(name)) {
             throw new BusinessRuleException(
                     "A branch with this name already exists"
             );
@@ -71,7 +65,6 @@ public class BranchServiceImpl implements BranchService {
                 && branchRepository.existsByType(
                 BranchType.MAIN_OFFICE
         )) {
-
             throw new BusinessRuleException(
                     "Main Office already exists"
             );
@@ -85,13 +78,9 @@ public class BranchServiceImpl implements BranchService {
                 );
 
         Branch savedBranch =
-                branchRepository.save(
-                        branch
-                );
+                branchRepository.save(branch);
 
-        return toResponse(
-                savedBranch
-        );
+        return toResponse(savedBranch);
     }
 
     @Override
@@ -114,7 +103,6 @@ public class BranchServiceImpl implements BranchService {
 
             if (active != null
                     && ownBranch.isActive() != active) {
-
                 return List.of();
             }
 
@@ -123,9 +111,7 @@ public class BranchServiceImpl implements BranchService {
             );
         }
 
-        if (callerRole == Role.OWNER
-                || callerRole == Role.MAIN_OFFICE_MANAGER
-                || callerRole == Role.ACCOUNTANT) {
+        if (canViewAllBranches(callerRole)) {
 
             List<Branch> branches;
 
@@ -167,47 +153,49 @@ public class BranchServiceImpl implements BranchService {
             Long callerAccountId
     ) {
 
-        Branch targetBranch =
+        Branch branch =
                 findBranchById(id);
 
-        if (callerRole == Role.BRANCH_MANAGER) {
-
-            Employee branchManager =
-                    findEmployeeByAccountId(
-                            callerAccountId
-                    );
-
-            Long ownBranchId =
-                    branchManager
-                            .getBranch()
-                            .getId();
-
-            if (!ownBranchId.equals(
-                    targetBranch.getId()
-            )) {
-
-                throw new AccessDeniedException(
-                        "Branch Manager can only view their own branch"
-                );
-            }
-
-            return toResponse(
-                    targetBranch
-            );
-        }
-
-        if (callerRole == Role.OWNER
-                || callerRole == Role.MAIN_OFFICE_MANAGER
-                || callerRole == Role.ACCOUNTANT) {
-
-            return toResponse(
-                    targetBranch
-            );
-        }
-
-        throw new AccessDeniedException(
-                "Not allowed to view this branch"
+        validateBranchViewAccess(
+                branch,
+                callerRole,
+                callerAccountId
         );
+
+        return toResponse(branch);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BranchResponse getBranchByCode(
+            String branchCode,
+            Role callerRole,
+            Long callerAccountId
+    ) {
+
+        String normalizedBranchCode =
+                branchCode
+                        .trim()
+                        .toUpperCase();
+
+        Branch branch =
+                branchRepository
+                        .findByBranchCodeIgnoreCase(
+                                normalizedBranchCode
+                        )
+                        .orElseThrow(() ->
+                                new ResourceNotFoundException(
+                                        "Branch not found"
+                                )
+                        );
+
+        validateBranchViewAccess(
+                branch,
+                callerRole,
+                callerAccountId
+        );
+
+        return toResponse(branch);
     }
 
     @Override
@@ -235,18 +223,12 @@ public class BranchServiceImpl implements BranchService {
             );
         }
 
-        branch.setName(
-                name
-        );
+        branch.setName(name);
 
         Branch savedBranch =
-                branchRepository.save(
-                        branch
-                );
+                branchRepository.save(branch);
 
-        return toResponse(
-                savedBranch
-        );
+        return toResponse(savedBranch);
     }
 
     @Override
@@ -262,8 +244,7 @@ public class BranchServiceImpl implements BranchService {
         boolean requestedStatus =
                 request.getActive();
 
-        if (branch.isActive()
-                == requestedStatus) {
+        if (branch.isActive() == requestedStatus) {
 
             throw new BusinessRuleException(
                     requestedStatus
@@ -272,18 +253,70 @@ public class BranchServiceImpl implements BranchService {
             );
         }
 
+        if (branch.getType() == BranchType.MAIN_OFFICE
+                && !requestedStatus) {
+
+            throw new BusinessRuleException(
+                    "Main Office cannot be deactivated"
+            );
+        }
+
         branch.setActive(
                 requestedStatus
         );
 
         Branch savedBranch =
-                branchRepository.save(
-                        branch
-                );
+                branchRepository.save(branch);
 
-        return toResponse(
-                savedBranch
+        return toResponse(savedBranch);
+    }
+
+    private void validateBranchViewAccess(
+            Branch branch,
+            Role callerRole,
+            Long callerAccountId
+    ) {
+
+        if (canViewAllBranches(callerRole)) {
+            return;
+        }
+
+        if (callerRole == Role.BRANCH_MANAGER) {
+
+            Employee branchManager =
+                    findEmployeeByAccountId(
+                            callerAccountId
+                    );
+
+            Long ownBranchId =
+                    branchManager
+                            .getBranch()
+                            .getId();
+
+            if (!ownBranchId.equals(
+                    branch.getId()
+            )) {
+
+                throw new AccessDeniedException(
+                        "Branch Manager can only view their own branch"
+                );
+            }
+
+            return;
+        }
+
+        throw new AccessDeniedException(
+                "Not allowed to view this branch"
         );
+    }
+
+    private boolean canViewAllBranches(
+            Role role
+    ) {
+
+        return role == Role.OWNER
+                || role == Role.MAIN_OFFICE_MANAGER
+                || role == Role.ACCOUNTANT;
     }
 
     private Branch findBranchById(

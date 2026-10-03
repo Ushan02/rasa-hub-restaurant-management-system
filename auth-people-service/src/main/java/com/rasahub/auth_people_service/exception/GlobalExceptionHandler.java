@@ -1,7 +1,10 @@
 package com.rasahub.auth_people_service.exception;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +30,25 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
+                .body(body);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, String>> handleAccessDenied(
+            AccessDeniedException e
+    ) {
+
+        Map<String, String> body = new HashMap<>();
+
+        body.put(
+                "message",
+                e.getMessage() != null
+                        ? e.getMessage()
+                        : "Access denied"
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
                 .body(body);
     }
 
@@ -69,8 +91,7 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException e
     ) {
 
-        Map<String, String> errors =
-                new HashMap<>();
+        Map<String, String> errors = new HashMap<>();
 
         e.getBindingResult()
                 .getFieldErrors()
@@ -84,5 +105,39 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(errors);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidRequestBody(
+            HttpMessageNotReadableException e
+    ) {
+
+        Map<String, String> body = new HashMap<>();
+
+        body.put(
+                "message",
+                "Invalid request body"
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(body);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrityViolation(
+            DataIntegrityViolationException e
+    ) {
+
+        Map<String, String> body = new HashMap<>();
+
+        body.put(
+                "message",
+                "Data conflict. A record with the same unique value may already exist"
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(body);
     }
 }

@@ -125,7 +125,7 @@ public class EmployeeServiceImpl implements EmployeeService {
 
         AuthAccount authAccount = null;
 
-        if (request.isCreateLoginAccount()) {
+        if (Boolean.TRUE.equals(request.getCreateLoginAccount())) {
 
             if (NON_LOGIN_POSITIONS.contains(
                     request.getPosition()
