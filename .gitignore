@@ -15,8 +15,11 @@ Thumbs.db
 *.log
 
 .env
+
 application.properties
+
+# Track Product Inventory service configuration
+!product-inventory-service/src/main/resources/application.properties
+
 application-local.properties
 application-secrets.properties
-
-.mvn/wrapper/maven-wrapper.jar
