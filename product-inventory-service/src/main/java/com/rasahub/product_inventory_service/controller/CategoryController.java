@@ -8,6 +8,7 @@ import com.rasahub.product_inventory_service.service.CategoryService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,6 +26,9 @@ public class CategoryController {
     }
 
     @PostMapping
+    @PreAuthorize(
+            "hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER')"
+    )
     public ResponseEntity<CategoryResponse> createCategory(
             @Valid
             @RequestBody
@@ -40,6 +44,14 @@ public class CategoryController {
     }
 
     @GetMapping
+    @PreAuthorize(
+            "hasAnyRole(" +
+                    "'OWNER'," +
+                    "'MAIN_OFFICE_MANAGER'," +
+                    "'BRANCH_MANAGER'," +
+                    "'CASHIER'" +
+                    ")"
+    )
     public ResponseEntity<List<CategoryResponse>>
     getCategories(
             @RequestParam(required = false)
@@ -52,6 +64,14 @@ public class CategoryController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize(
+            "hasAnyRole(" +
+                    "'OWNER'," +
+                    "'MAIN_OFFICE_MANAGER'," +
+                    "'BRANCH_MANAGER'," +
+                    "'CASHIER'" +
+                    ")"
+    )
     public ResponseEntity<CategoryResponse>
     getCategoryById(
             @PathVariable Long id
@@ -63,18 +83,30 @@ public class CategoryController {
     }
 
     @GetMapping("/by-code/{categoryCode}")
+    @PreAuthorize(
+            "hasAnyRole(" +
+                    "'OWNER'," +
+                    "'MAIN_OFFICE_MANAGER'," +
+                    "'BRANCH_MANAGER'," +
+                    "'CASHIER'" +
+                    ")"
+    )
     public ResponseEntity<CategoryResponse>
     getCategoryByCode(
             @PathVariable String categoryCode
     ) {
 
         return ResponseEntity.ok(
-                categoryService
-                        .getCategoryByCode(categoryCode)
+                categoryService.getCategoryByCode(
+                        categoryCode
+                )
         );
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize(
+            "hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER')"
+    )
     public ResponseEntity<CategoryResponse>
     updateCategory(
             @PathVariable Long id,
@@ -92,6 +124,9 @@ public class CategoryController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize(
+            "hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER')"
+    )
     public ResponseEntity<CategoryResponse>
     updateCategoryStatus(
             @PathVariable Long id,
@@ -101,11 +136,10 @@ public class CategoryController {
     ) {
 
         return ResponseEntity.ok(
-                categoryService
-                        .updateCategoryStatus(
-                                id,
-                                request
-                        )
+                categoryService.updateCategoryStatus(
+                        id,
+                        request
+                )
         );
     }
 }

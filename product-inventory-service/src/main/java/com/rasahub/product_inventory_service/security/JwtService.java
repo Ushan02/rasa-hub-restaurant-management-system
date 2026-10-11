@@ -55,6 +55,7 @@ public class JwtService {
 
         try {
             return !isTokenExpired(token);
+
         } catch (Exception exception) {
             return false;
         }
