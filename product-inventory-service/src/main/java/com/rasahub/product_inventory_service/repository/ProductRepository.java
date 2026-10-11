@@ -28,6 +28,11 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             Long categoryId
     );
 
+    List<Product> findByCategoryIdAndActiveOrderByIdAsc(
+            Long categoryId,
+            boolean active
+    );
+
     @Query(
             value = "SELECT nextval('product_code_seq')",
             nativeQuery = true
