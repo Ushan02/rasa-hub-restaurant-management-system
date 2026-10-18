@@ -8,7 +8,7 @@ public class ProductUpdateRequest {
 
     @NotBlank(message = "Product name is required")
     @Size(
-            max = 150,
+            max = 100,
             message = "Product name must not exceed 150 characters"
     )
     private String name;
