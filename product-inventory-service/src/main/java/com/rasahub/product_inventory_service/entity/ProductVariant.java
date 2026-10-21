@@ -1,5 +1,6 @@
 package com.rasahub.product_inventory_service.entity;
 
+import com.rasahub.product_inventory_service.enums.ProductVariantName;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -51,12 +52,13 @@ public class ProductVariant {
     )
     private Product product;
 
+    @Enumerated(EnumType.STRING)
     @Column(
             name = "name",
             nullable = false,
-            length = 100
+            length = 20
     )
-    private String name;
+    private ProductVariantName name;
 
     @Column(
             name = "price",
@@ -91,7 +93,7 @@ public class ProductVariant {
     public ProductVariant(
             String variantCode,
             Product product,
-            String name,
+            ProductVariantName name,
             BigDecimal price
     ) {
         this.variantCode = variantCode;
@@ -130,7 +132,7 @@ public class ProductVariant {
         return product;
     }
 
-    public String getName() {
+    public ProductVariantName getName() {
         return name;
     }
 
@@ -150,7 +152,7 @@ public class ProductVariant {
         return updatedAt;
     }
 
-    public void setName(String name) {
+    public void setName(ProductVariantName name) {
         this.name = name;
     }
 
