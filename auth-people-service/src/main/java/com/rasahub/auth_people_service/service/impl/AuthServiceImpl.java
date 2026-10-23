@@ -14,6 +14,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
@@ -60,7 +61,8 @@ public class AuthServiceImpl implements AuthService {
 
         return authenticate(
                 account,
-                request.getPassword()
+                request.getPassword(),
+                employee.getBranch().getId()
         );
     }
 
@@ -90,13 +92,15 @@ public class AuthServiceImpl implements AuthService {
 
         return authenticate(
                 account,
-                request.getPassword()
+                request.getPassword(),
+                null
         );
     }
 
     private LoginResponse authenticate(
             AuthAccount account,
-            String rawPassword
+            String rawPassword,
+            Long branchId
     ) {
 
         if (account == null) {
@@ -120,13 +124,25 @@ public class AuthServiceImpl implements AuthService {
             );
         }
 
+        Map<String, Object> claims =
+                new HashMap<>();
+
+        claims.put(
+                "role",
+                account.getRole().name()
+        );
+
+        if (branchId != null) {
+            claims.put(
+                    "branchId",
+                    branchId
+            );
+        }
+
         String token =
                 jwtService.generateToken(
                         account.getId().toString(),
-                        Map.of(
-                                "role",
-                                account.getRole().name()
-                        )
+                        claims
                 );
 
         return new LoginResponse(
