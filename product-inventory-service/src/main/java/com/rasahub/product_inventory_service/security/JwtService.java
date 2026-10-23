@@ -51,6 +51,30 @@ public class JwtService {
         );
     }
 
+    public Long extractBranchId(String token) {
+
+        return extractClaim(
+                token,
+                claims -> {
+
+                    Object branchId =
+                            claims.get("branchId");
+
+                    if (branchId == null) {
+                        return null;
+                    }
+
+                    if (branchId instanceof Number number) {
+                        return number.longValue();
+                    }
+
+                    return Long.valueOf(
+                            branchId.toString()
+                    );
+                }
+        );
+    }
+
     public boolean isTokenValid(String token) {
 
         try {

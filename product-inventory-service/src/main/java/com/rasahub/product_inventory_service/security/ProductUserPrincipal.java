@@ -11,13 +11,16 @@ public class ProductUserPrincipal implements UserDetails {
 
     private final Long accountId;
     private final String role;
+    private final Long branchId;
 
     public ProductUserPrincipal(
             Long accountId,
-            String role
+            String role,
+            Long branchId
     ) {
         this.accountId = accountId;
         this.role = role;
+        this.branchId = branchId;
     }
 
     public Long getAccountId() {
@@ -26,6 +29,10 @@ public class ProductUserPrincipal implements UserDetails {
 
     public String getRole() {
         return role;
+    }
+
+    public Long getBranchId() {
+        return branchId;
     }
 
     @Override

@@ -56,6 +56,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String role =
                     jwtService.extractRole(token);
 
+            Long branchId =
+                    jwtService.extractBranchId(token);
+
             if (role == null || role.isBlank()) {
 
                 filterChain.doFilter(request, response);
@@ -65,7 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             ProductUserPrincipal principal =
                     new ProductUserPrincipal(
                             accountId,
-                            role
+                            role,
+                            branchId
                     );
 
             UsernamePasswordAuthenticationToken authentication =
