@@ -1,3 +1,4 @@
+
 package com.rasahub.auth_people_service.service.impl;
 
 import com.rasahub.auth_people_service.dto.auth.LoginRequest;
@@ -10,17 +11,21 @@ import com.rasahub.auth_people_service.repository.CustomerRepository;
 import com.rasahub.auth_people_service.repository.EmployeeRepository;
 import com.rasahub.auth_people_service.security.JwtService;
 import com.rasahub.auth_people_service.service.AuthService;
+
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@Transactional(readOnly = true)
 public class AuthServiceImpl implements AuthService {
 
-    private static final String INVALID_CREDENTIALS = "Invalid credentials";
+    private static final String INVALID_CREDENTIALS =
+            "Invalid credentials";
 
     private final EmployeeRepository employeeRepository;
     private final CustomerRepository customerRepository;
