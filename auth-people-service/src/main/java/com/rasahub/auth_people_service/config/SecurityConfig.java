@@ -1,7 +1,10 @@
+
 package com.rasahub.auth_people_service.config;
 
 import com.rasahub.auth_people_service.security.JwtAuthenticationFilter;
+
 import jakarta.servlet.http.HttpServletResponse;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -24,8 +27,7 @@ public class SecurityConfig {
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter
     ) {
-        this.jwtAuthenticationFilter =
-                jwtAuthenticationFilter;
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
     @Bean
@@ -97,6 +99,12 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth ->
                         auth
+
+                                .requestMatchers(
+                                        HttpMethod.GET,
+                                        "/internal/v1/branches/snapshot"
+                                )
+                                .permitAll()
 
                                 .requestMatchers(
                                         "/api/v1/auth/**"

@@ -1,6 +1,8 @@
+
 package com.rasahub.auth_people_service.dto.branch;
 
 import com.rasahub.auth_people_service.enums.BranchType;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -9,15 +11,22 @@ import jakarta.validation.constraints.Size;
 public class BranchRequest {
 
     @NotBlank(message = "Branch code is required")
-    @Size(max = 20, message = "Branch code must be under 20 characters")
+    @Size(
+            min = 5,
+            max = 5,
+            message = "Branch code must contain exactly 5 characters"
+    )
     @Pattern(
-            regexp = "^[A-Za-z0-9_-]+$",
-            message = "Branch code can contain only letters, numbers, hyphens and underscores"
+            regexp = "(?i)^(MO[0-9]{3}|BR[0-9]{3})$",
+            message = "Branch code must follow MO001 or BR001 format"
     )
     private String branchCode;
 
     @NotBlank(message = "Branch name is required")
-    @Size(max = 100, message = "Branch name must be under 100 characters")
+    @Size(
+            max = 100,
+            message = "Branch name must not exceed 100 characters"
+    )
     private String name;
 
     @NotNull(message = "Branch type is required")
