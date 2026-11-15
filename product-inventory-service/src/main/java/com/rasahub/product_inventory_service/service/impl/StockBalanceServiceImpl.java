@@ -12,8 +12,10 @@ import com.rasahub.product_inventory_service.exception.ResourceNotFoundException
 import com.rasahub.product_inventory_service.repository.InventoryItemRepository;
 import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
+import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockBalanceService;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,15 +29,27 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     private final StockBalanceRepository stockBalanceRepository;
     private final StockLocationRepository stockLocationRepository;
     private final InventoryItemRepository inventoryItemRepository;
+    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
 
     public StockBalanceServiceImpl(
             StockBalanceRepository stockBalanceRepository,
             StockLocationRepository stockLocationRepository,
             InventoryItemRepository inventoryItemRepository
     ) {
+        this(stockBalanceRepository, stockLocationRepository, inventoryItemRepository, null);
+    }
+
+    @Autowired
+    public StockBalanceServiceImpl(
+            StockBalanceRepository stockBalanceRepository,
+            StockLocationRepository stockLocationRepository,
+            InventoryItemRepository inventoryItemRepository,
+            LowStockAlertEvaluationService lowStockAlertEvaluationService
+    ) {
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.inventoryItemRepository = inventoryItemRepository;
+        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
     }
 
     @Override
@@ -156,6 +170,13 @@ public class StockBalanceServiceImpl implements StockBalanceService {
 
         StockBalance savedBalance =
                 stockBalanceRepository.saveAndFlush(balance);
+
+        if (lowStockAlertEvaluationService != null) {
+            lowStockAlertEvaluationService.evaluateItem(
+                    location.getLocationCode(),
+                    item.getId()
+            );
+        }
 
         return new StockBalanceResponse(savedBalance);
     }
