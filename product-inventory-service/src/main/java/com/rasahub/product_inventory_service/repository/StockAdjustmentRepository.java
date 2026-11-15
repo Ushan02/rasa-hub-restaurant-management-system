@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface StockAdjustmentRepository
@@ -79,8 +80,11 @@ public interface StockAdjustmentRepository
 
     @EntityGraph(attributePaths = {
             "stockLocation",
+            "sourceStockCount",
             "items",
-            "items.inventoryItem"
+            "items.inventoryItem",
+            "items.sourceStockCountItem",
+            "items.sourceStockCountItem.stockCount"
     })
     @Query("""
             SELECT adjustment
@@ -99,5 +103,17 @@ public interface StockAdjustmentRepository
             """)
     Optional<StockAdjustment> findByIdForUpdate(
             @Param("id") Long id
+    );
+
+    @EntityGraph(attributePaths = {
+            "stockLocation",
+            "sourceStockCount",
+            "items",
+            "items.inventoryItem",
+            "items.sourceStockCountItem",
+            "items.sourceStockCountItem.stockCount"
+    })
+    List<StockAdjustment> findBySourceStockCount_IdOrderByIdAsc(
+            Long stockCountId
     );
 }

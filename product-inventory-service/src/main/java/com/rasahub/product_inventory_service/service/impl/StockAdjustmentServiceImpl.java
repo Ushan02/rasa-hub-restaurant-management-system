@@ -10,10 +10,14 @@ import com.rasahub.product_inventory_service.entity.InventoryItem;
 import com.rasahub.product_inventory_service.entity.StockAdjustment;
 import com.rasahub.product_inventory_service.entity.StockAdjustmentItem;
 import com.rasahub.product_inventory_service.entity.StockBalance;
+import com.rasahub.product_inventory_service.entity.StockCount;
+import com.rasahub.product_inventory_service.entity.StockCountItem;
 import com.rasahub.product_inventory_service.entity.StockLocation;
 import com.rasahub.product_inventory_service.entity.StockMovement;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentDirection;
+import com.rasahub.product_inventory_service.enums.StockAdjustmentReason;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentStatus;
+import com.rasahub.product_inventory_service.enums.StockCountStatus;
 import com.rasahub.product_inventory_service.enums.StockMovementType;
 import com.rasahub.product_inventory_service.exception.BusinessRuleException;
 import com.rasahub.product_inventory_service.exception.ResourceNotFoundException;
@@ -259,6 +263,83 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
         requireAnyRole(user, "STOCK_KEEPER");
         validateId(adjustmentId);
 
+        return new StockAdjustmentResponse(
+                postAdjustmentUnderLock(adjustmentId, user)
+        );
+    }
+
+    @Override
+    @Transactional
+    public List<StockAdjustmentResponse> postStockCountVariances(
+            StockCount stockCount
+    ) {
+        ProductUserPrincipal user = currentUser();
+        requireAnyRole(user, "STOCK_KEEPER");
+        if (stockCount == null
+                || stockCount.getId() == null
+                || stockCount.getStatus() != StockCountStatus.APPROVED) {
+            throw new BusinessRuleException(
+                    "An approved, persisted stock count is required"
+            );
+        }
+
+        List<StockAdjustmentResponse> responses = new ArrayList<>();
+        for (StockAdjustmentDirection direction
+                : StockAdjustmentDirection.values()) {
+            List<StockCountItem> varianceItems = stockCount.getItems().stream()
+                    .filter(item -> item.getPhysicalQuantity() != null)
+                    .filter(item -> direction == StockAdjustmentDirection.IN
+                            ? item.getVarianceQuantity().signum() > 0
+                            : item.getVarianceQuantity().signum() < 0)
+                    .sorted(Comparator.comparing(
+                            item -> item.getInventoryItem().getId()
+                    ))
+                    .toList();
+            if (varianceItems.isEmpty()) {
+                continue;
+            }
+
+            StockAdjustment adjustment;
+            try {
+                adjustment = new StockAdjustment(
+                        stockCount.getStockLocation(),
+                        StockAdjustmentReason.MANUAL_CORRECTION,
+                        direction,
+                        stockCount.getCreatedByAccountId(),
+                        "Stock count variance #" + stockCount.getId()
+                );
+                adjustment.linkToStockCount(stockCount);
+                for (StockCountItem item : varianceItems) {
+                    adjustment.addCountVarianceItem(
+                            item.getInventoryItem(),
+                            item.getVarianceQuantity().abs(),
+                            item
+                    );
+                }
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                throw new BusinessRuleException(exception.getMessage());
+            }
+
+            adjustment = adjustmentRepository.saveAndFlush(adjustment);
+            try {
+                adjustment.submit(stockCount.getCreatedByAccountId());
+                adjustment.approve(stockCount.getReviewedByAccountId());
+            } catch (IllegalArgumentException | IllegalStateException exception) {
+                throw new BusinessRuleException(exception.getMessage());
+            }
+            adjustmentRepository.saveAndFlush(adjustment);
+
+            responses.add(new StockAdjustmentResponse(
+                    postAdjustmentUnderLock(adjustment.getId(), user)
+            ));
+        }
+        return List.copyOf(responses);
+    }
+
+    private StockAdjustment postAdjustmentUnderLock(
+            Long adjustmentId,
+            ProductUserPrincipal user
+    ) {
         StockAdjustment adjustment = lockAdjustment(adjustmentId);
         String locationCode =
                 adjustment.getStockLocation().getLocationCode();
@@ -359,9 +440,7 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
             throw new BusinessRuleException(exception.getMessage());
         }
 
-        return new StockAdjustmentResponse(
-                adjustmentRepository.saveAndFlush(adjustment)
-        );
+        return adjustmentRepository.saveAndFlush(adjustment);
     }
 
     @Override

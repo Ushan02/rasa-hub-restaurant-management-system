@@ -3,6 +3,7 @@ package com.rasahub.product_inventory_service.entity;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentDirection;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentReason;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentStatus;
+import com.rasahub.product_inventory_service.enums.StockCountStatus;
 import jakarta.persistence.*;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -38,6 +39,15 @@ import java.util.Set;
                         name = "idx_stock_adjustment_created_by",
                         columnList = "created_by_account_id"
                 )
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_stock_adjustment_count_direction",
+                        columnNames = {
+                                "source_stock_count_id",
+                                "direction"
+                        }
+                )
         }
 )
 public class StockAdjustment {
@@ -58,6 +68,13 @@ public class StockAdjustment {
             foreignKey = @ForeignKey(name = "fk_stock_adjustment_location")
     )
     private StockLocation stockLocation;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "source_stock_count_id",
+            foreignKey = @ForeignKey(name = "fk_stock_adjustment_source_count")
+    )
+    private StockCount sourceStockCount;
 
     @NotNull
     @Enumerated(EnumType.STRING)
@@ -177,6 +194,55 @@ public class StockAdjustment {
         }
 
         items.add(new StockAdjustmentItem(this, inventoryItem, quantity));
+    }
+
+    public void linkToStockCount(StockCount count) {
+        validateDraft();
+        if (count == null
+                || count.getId() == null
+                || count.getStatus() != StockCountStatus.APPROVED
+                || !stockLocation.getLocationCode().equals(
+                        count.getStockLocation().getLocationCode())
+                || sourceStockCount != null) {
+            throw new IllegalArgumentException(
+                    "An approved stock count for the same location is required"
+            );
+        }
+        sourceStockCount = count;
+    }
+
+    public void addCountVarianceItem(
+            InventoryItem inventoryItem,
+            java.math.BigDecimal quantity,
+            StockCountItem sourceItem
+    ) {
+        validateDraft();
+        if (sourceStockCount == null
+                || sourceItem == null
+                || sourceItem.getId() == null
+                || sourceItem.getStockCount() == null
+                || !sourceItem.getStockCount().getId()
+                        .equals(sourceStockCount.getId())
+                || inventoryItem == null
+                || !sourceItem.getInventoryItem().getId()
+                        .equals(inventoryItem.getId())) {
+            throw new IllegalArgumentException(
+                    "Count variance item must belong to the linked stock count"
+            );
+        }
+        if (items.stream().anyMatch(existing ->
+                existing.getInventoryItem().getId()
+                        .equals(inventoryItem.getId()))) {
+            throw new IllegalArgumentException(
+                    "Duplicate inventory item in stock adjustment"
+            );
+        }
+        items.add(new StockAdjustmentItem(
+                this,
+                inventoryItem,
+                quantity,
+                sourceItem
+        ));
     }
 
     public void updateDraft(
@@ -448,6 +514,10 @@ public class StockAdjustment {
 
     public StockLocation getStockLocation() {
         return stockLocation;
+    }
+
+    public StockCount getSourceStockCount() {
+        return sourceStockCount;
     }
 
     public StockAdjustmentReason getAdjustmentReason() {

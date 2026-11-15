@@ -14,6 +14,7 @@ public class StockAdjustmentItemResponse {
     private final String inventoryItemName;
     private final MeasurementUnit measurementUnit;
     private final BigDecimal adjustmentQuantity;
+    private final Long sourceStockCountItemId;
 
     public StockAdjustmentItemResponse(StockAdjustmentItem item) {
         InventoryItem inventoryItem = item.getInventoryItem();
@@ -23,6 +24,9 @@ public class StockAdjustmentItemResponse {
         inventoryItemName = inventoryItem.getItemName();
         measurementUnit = inventoryItem.getMeasurementUnit();
         adjustmentQuantity = item.getAdjustmentQuantity();
+        sourceStockCountItemId = item.getSourceStockCountItem() == null
+                ? null
+                : item.getSourceStockCountItem().getId();
     }
 
     public Long getId() {
@@ -47,5 +51,9 @@ public class StockAdjustmentItemResponse {
 
     public BigDecimal getAdjustmentQuantity() {
         return adjustmentQuantity;
+    }
+
+    public Long getSourceStockCountItemId() {
+        return sourceStockCountItemId;
     }
 }

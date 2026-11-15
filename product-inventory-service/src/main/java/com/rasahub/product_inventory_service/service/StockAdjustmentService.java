@@ -4,10 +4,12 @@ import com.rasahub.product_inventory_service.dto.stockadjustment.StockAdjustment
 import com.rasahub.product_inventory_service.dto.stockadjustment.StockAdjustmentRejectRequest;
 import com.rasahub.product_inventory_service.dto.stockadjustment.StockAdjustmentResponse;
 import com.rasahub.product_inventory_service.dto.stockadjustment.StockAdjustmentUpdateRequest;
+import com.rasahub.product_inventory_service.entity.StockCount;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentStatus;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface StockAdjustmentService {
 
@@ -30,6 +32,10 @@ public interface StockAdjustmentService {
     );
 
     StockAdjustmentResponse postStockAdjustment(Long adjustmentId);
+
+    List<StockAdjustmentResponse> postStockCountVariances(
+            StockCount stockCount
+    );
 
     StockAdjustmentResponse getStockAdjustmentById(Long adjustmentId);
 

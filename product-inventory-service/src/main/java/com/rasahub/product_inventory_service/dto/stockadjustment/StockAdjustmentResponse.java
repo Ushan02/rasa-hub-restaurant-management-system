@@ -14,6 +14,7 @@ public class StockAdjustmentResponse {
     private final Long id;
     private final String locationCode;
     private final String locationName;
+    private final Long sourceStockCountId;
     private final StockAdjustmentReason adjustmentReason;
     private final StockAdjustmentDirection direction;
     private final StockAdjustmentStatus status;
@@ -36,6 +37,9 @@ public class StockAdjustmentResponse {
         id = adjustment.getId();
         locationCode = location.getLocationCode();
         locationName = location.getLocationName();
+        sourceStockCountId = adjustment.getSourceStockCount() == null
+                ? null
+                : adjustment.getSourceStockCount().getId();
         adjustmentReason = adjustment.getAdjustmentReason();
         direction = adjustment.getDirection();
         status = adjustment.getStatus();
@@ -66,6 +70,10 @@ public class StockAdjustmentResponse {
 
     public String getLocationName() {
         return locationName;
+    }
+
+    public Long getSourceStockCountId() {
+        return sourceStockCountId;
     }
 
     public StockAdjustmentReason getAdjustmentReason() {

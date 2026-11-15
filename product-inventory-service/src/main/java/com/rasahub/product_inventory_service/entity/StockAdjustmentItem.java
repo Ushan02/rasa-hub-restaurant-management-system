@@ -58,6 +58,16 @@ public class StockAdjustmentItem {
     )
     private InventoryItem inventoryItem;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "source_stock_count_item_id",
+            unique = true,
+            foreignKey = @ForeignKey(
+                    name = "fk_stock_adjustment_item_count_item"
+            )
+    )
+    private StockCountItem sourceStockCountItem;
+
     @NotNull
     @DecimalMin(
             value = "0.000",
@@ -89,6 +99,15 @@ public class StockAdjustmentItem {
             InventoryItem inventoryItem,
             BigDecimal adjustmentQuantity
     ) {
+        this(stockAdjustment, inventoryItem, adjustmentQuantity, null);
+    }
+
+    public StockAdjustmentItem(
+            StockAdjustment stockAdjustment,
+            InventoryItem inventoryItem,
+            BigDecimal adjustmentQuantity,
+            StockCountItem sourceStockCountItem
+    ) {
         if (stockAdjustment == null
                 || stockAdjustment.getStatus()
                 != StockAdjustmentStatus.DRAFT) {
@@ -98,10 +117,27 @@ public class StockAdjustmentItem {
         }
         validateInventoryItem(inventoryItem);
         validateQuantity(inventoryItem, adjustmentQuantity);
+        if ((stockAdjustment.getSourceStockCount() == null)
+                != (sourceStockCountItem == null)) {
+            throw new IllegalArgumentException(
+                    "Count-linked adjustment items require their source count item"
+            );
+        }
+        if (sourceStockCountItem != null
+                && (sourceStockCountItem.getStockCount() == null
+                || !sourceStockCountItem.getStockCount().getId()
+                        .equals(stockAdjustment.getSourceStockCount().getId())
+                || !sourceStockCountItem.getInventoryItem().getId()
+                        .equals(inventoryItem.getId()))) {
+            throw new IllegalArgumentException(
+                    "Source count item does not match the stock adjustment"
+            );
+        }
 
         this.stockAdjustment = stockAdjustment;
         this.inventoryItem = inventoryItem;
         this.adjustmentQuantity = adjustmentQuantity;
+        this.sourceStockCountItem = sourceStockCountItem;
     }
 
     public void attachTo(StockAdjustment adjustment) {
@@ -189,6 +225,10 @@ public class StockAdjustmentItem {
 
     public InventoryItem getInventoryItem() {
         return inventoryItem;
+    }
+
+    public StockCountItem getSourceStockCountItem() {
+        return sourceStockCountItem;
     }
 
     public BigDecimal getAdjustmentQuantity() {
