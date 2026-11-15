@@ -208,6 +208,62 @@ class JwtSecurityIntegrationTest {
     }
 
     @Test
+    void alertReportAndAuditEndpointsDenyUnsupportedRoles()
+            throws Exception {
+        String unknownRole = signedToken(
+                "101",
+                "NOT_A_RASA_ROLE",
+                null,
+                Map.of()
+        );
+        String authorization = bearer(unknownRole);
+
+        mockMvc.perform(get("/api/v1/low-stock-alerts/location/Main")
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/inventory-reports/stock-balances")
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/audit-history")
+                        .header("Authorization", authorization))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void alertReportAndAuditEndpointsRejectInvalidRequestFilters()
+            throws Exception {
+        String authorization = bearer(signedToken(
+                "101",
+                "OWNER",
+                null,
+                Map.of()
+        ));
+
+        mockMvc.perform(patch("/api/v1/low-stock-alerts/1/acknowledge")
+                        .header("Authorization", authorization)
+                        .param("remarks", "x".repeat(501)))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/v1/inventory-reports/stock-balances")
+                        .header("Authorization", authorization)
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/inventory-reports/stock-movements")
+                        .header("Authorization", authorization)
+                        .param("movementType", "NOT_A_MOVEMENT_TYPE"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/v1/audit-history")
+                        .header("Authorization", authorization)
+                        .param("entityType", "invalid-type"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/audit-history")
+                        .header("Authorization", authorization)
+                        .param("size", "101"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void actorIdentityComesFromSignedSubjectNotClientSuppliedAccountId()
             throws Exception {
         StockLocation main = stockLocationRepository.saveAndFlush(

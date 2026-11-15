@@ -249,6 +249,26 @@ class DailyRawMaterialUsageIntegrationTest {
     }
 
     @Test
+    void createEndpointRejectsMalformedAndMissingRequiredRequestData()
+            throws Exception {
+        String authorization = token("BRANCH_MANAGER", BRANCH_ID);
+
+        mockMvc.perform(post("/api/v1/daily-raw-material-usages")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/v1/daily-raw-material-usages")
+                        .header("Authorization", authorization)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        assertEquals(0, usageRepository.count());
+    }
+
+    @Test
     void insufficientStockRollsBackEveryBalanceAndMovementChange()
             throws Exception {
         createBalance(branchOne, itemOne, "5");
