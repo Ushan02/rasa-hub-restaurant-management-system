@@ -75,6 +75,8 @@ class DailyRawMaterialUsageServiceImplTest {
 
     @Mock
     private HttpServletRequest servletRequest;
+    @Mock
+    private AuditLogService auditLogService;
 
     private DailyRawMaterialUsageServiceImpl service;
     private StockLocation branch;
@@ -121,6 +123,7 @@ class DailyRawMaterialUsageServiceImplTest {
                 servletRequest,
                 "http://127.0.0.1:" + branchServer.getAddress().getPort()
         );
+        ReflectionTestUtils.setField(service, "auditLogService", auditLogService);
         lenient().when(servletRequest.getHeader(HttpHeaders.AUTHORIZATION))
                 .thenReturn("Bearer test-token");
         lenient().when(stockLocationRepository.findById("BR001"))

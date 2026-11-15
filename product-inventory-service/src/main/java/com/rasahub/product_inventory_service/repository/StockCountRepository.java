@@ -2,6 +2,7 @@ package com.rasahub.product_inventory_service.repository;
 
 import com.rasahub.product_inventory_service.entity.StockCount;
 import com.rasahub.product_inventory_service.enums.StockCountStatus;
+import com.rasahub.product_inventory_service.repository.LocationCountProjection;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,9 +14,21 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.List;
 
 public interface StockCountRepository
         extends JpaRepository<StockCount, Long> {
+
+    @Query("""
+            SELECT stockCount.stockLocation.locationCode AS locationCode,
+                   COUNT(stockCount.id) AS recordCount
+            FROM StockCount stockCount
+            WHERE stockCount.status = :status
+            GROUP BY stockCount.stockLocation.locationCode
+            """)
+    List<LocationCountProjection> countByStatusGroupedByLocation(
+            @Param("status") StockCountStatus status
+    );
 
     @EntityGraph(attributePaths = "stockLocation")
     Page<StockCount> findAllByOrderByCountDateDescCreatedAtDescIdDesc(

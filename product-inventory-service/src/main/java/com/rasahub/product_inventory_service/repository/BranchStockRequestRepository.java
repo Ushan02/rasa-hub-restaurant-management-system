@@ -3,6 +3,7 @@ package com.rasahub.product_inventory_service.repository;
 
 import com.rasahub.product_inventory_service.entity.BranchStockRequest;
 import com.rasahub.product_inventory_service.enums.BranchStockRequestStatus;
+import com.rasahub.product_inventory_service.repository.LocationCountProjection;
 
 import jakarta.persistence.LockModeType;
 
@@ -17,9 +18,21 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface BranchStockRequestRepository
         extends JpaRepository<BranchStockRequest, Long> {
+
+    @Query("""
+            SELECT request.branchLocation.locationCode AS locationCode,
+                   COUNT(request.id) AS recordCount
+            FROM BranchStockRequest request
+            WHERE request.status = :status
+            GROUP BY request.branchLocation.locationCode
+            """)
+    List<LocationCountProjection> countByStatusGroupedByLocation(
+            @Param("status") BranchStockRequestStatus status
+    );
 
     @EntityGraph(attributePaths = "branchLocation")
     Page<BranchStockRequest> findAllByOrderByCreatedAtDescIdDesc(

@@ -26,8 +26,10 @@ import com.rasahub.product_inventory_service.repository.SupplierRepository;
 import com.rasahub.product_inventory_service.repository.SupplierItemRepository;
 
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.PurchaseOrderService;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -55,6 +57,9 @@ public class PurchaseOrderServiceImpl
     private final PurchaseRequestRepository purchaseRequestRepository;
     private final SupplierRepository supplierRepository;
     private final SupplierItemRepository supplierItemRepository;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public PurchaseOrderServiceImpl(
             PurchaseOrderRepository purchaseOrderRepository,
@@ -317,6 +322,17 @@ public class PurchaseOrderServiceImpl
                         purchaseOrder
                 );
 
+        auditLogService.record(
+                "PURCHASE_ORDER",
+                savedPurchaseOrder.getId(),
+                "CREATED",
+                user.getAccountId(),
+                null,
+                savedPurchaseOrder.getStatus().name(),
+                null,
+                "PURCHASE_REQUEST:" + purchaseRequest.getId(),
+                purchaseOrder.getDestinationLocation().getLocationCode()
+        );
         return new PurchaseOrderResponse(
                 savedPurchaseOrder
         );
@@ -493,8 +509,9 @@ public class PurchaseOrderServiceImpl
             Long purchaseOrderId,
             PurchaseOrderCancelRequest request
     ) {
+        ProductUserPrincipal user = currentUser();
         requireAnyRole(
-                currentUser(),
+                user,
                 "OWNER",
                 "MAIN_OFFICE_MANAGER"
         );
@@ -540,6 +557,7 @@ public class PurchaseOrderServiceImpl
             );
         }
 
+        PurchaseOrderStatus previousStatus = purchaseOrder.getStatus();
         try {
             purchaseOrder.cancel(
                     request.getCancellationReason()
@@ -556,6 +574,17 @@ public class PurchaseOrderServiceImpl
                         purchaseOrder
                 );
 
+        auditLogService.record(
+                "PURCHASE_ORDER",
+                savedPurchaseOrder.getId(),
+                "CANCELLED",
+                user.getAccountId(),
+                previousStatus.name(),
+                savedPurchaseOrder.getStatus().name(),
+                request.getCancellationReason(),
+                null,
+                savedPurchaseOrder.getDestinationLocation().getLocationCode()
+        );
         return new PurchaseOrderResponse(
                 savedPurchaseOrder
         );

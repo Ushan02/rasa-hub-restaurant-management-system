@@ -20,8 +20,10 @@ import com.rasahub.product_inventory_service.repository.PurchaseRequestRepositor
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.PurchaseRequestService;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +46,9 @@ public class PurchaseRequestServiceImpl
     private final PurchaseRequestRepository purchaseRequestRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final StockLocationRepository stockLocationRepository;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public PurchaseRequestServiceImpl(
             PurchaseRequestRepository purchaseRequestRepository,
@@ -286,6 +291,7 @@ public class PurchaseRequestServiceImpl
 
         validateReview(purchaseRequest, user.getAccountId());
 
+        PurchaseRequestStatus previousStatus = purchaseRequest.getStatus();
         purchaseRequest.approve(user.getAccountId());
 
         PurchaseRequest savedRequest =
@@ -293,6 +299,17 @@ public class PurchaseRequestServiceImpl
                         purchaseRequest
                 );
 
+        auditLogService.record(
+                "PURCHASE_REQUEST",
+                savedRequest.getId(),
+                "APPROVED",
+                user.getAccountId(),
+                previousStatus.name(),
+                savedRequest.getStatus().name(),
+                null,
+                null,
+                savedRequest.getDestinationLocation().getLocationCode()
+        );
         return new PurchaseRequestResponse(savedRequest);
     }
 
@@ -332,6 +349,7 @@ public class PurchaseRequestServiceImpl
 
         validateReview(purchaseRequest, user.getAccountId());
 
+        PurchaseRequestStatus previousStatus = purchaseRequest.getStatus();
         purchaseRequest.reject(
                 user.getAccountId(),
                 request.getRejectionReason()
@@ -342,6 +360,17 @@ public class PurchaseRequestServiceImpl
                         purchaseRequest
                 );
 
+        auditLogService.record(
+                "PURCHASE_REQUEST",
+                savedRequest.getId(),
+                "REJECTED",
+                user.getAccountId(),
+                previousStatus.name(),
+                savedRequest.getStatus().name(),
+                request.getRejectionReason(),
+                null,
+                savedRequest.getDestinationLocation().getLocationCode()
+        );
         return new PurchaseRequestResponse(savedRequest);
     }
 

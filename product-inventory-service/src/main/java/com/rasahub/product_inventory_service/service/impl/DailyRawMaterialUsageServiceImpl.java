@@ -23,6 +23,7 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.DailyRawMaterialUsageService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 
@@ -66,6 +67,9 @@ public class DailyRawMaterialUsageServiceImpl
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public DailyRawMaterialUsageServiceImpl(
             DailyRawMaterialUsageRepository usageRepository,
@@ -334,6 +338,17 @@ public class DailyRawMaterialUsageServiceImpl
 
         usage.post(user.getAccountId());
         DailyRawMaterialUsage saved = usageRepository.saveAndFlush(usage);
+        auditLogService.record(
+                "DAILY_USAGE",
+                saved.getId(),
+                "POSTED",
+                user.getAccountId(),
+                DailyRawMaterialUsageStatus.DRAFT.name(),
+                saved.getStatus().name(),
+                null,
+                null,
+                branchCode
+        );
         if (lowStockAlertEvaluationService != null) {
             for (DailyRawMaterialUsageItem usageItem : itemsInLockOrder) {
                 lowStockAlertEvaluationService.evaluateItem(branchCode, usageItem.getInventoryItem().getId());

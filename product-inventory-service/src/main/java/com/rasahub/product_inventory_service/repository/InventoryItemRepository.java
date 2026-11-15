@@ -28,6 +28,8 @@ public interface InventoryItemRepository
             boolean active
     );
 
+    long countByActiveTrue();
+
     @Query(
             value = "SELECT nextval('inventory_item_code_seq')",
             nativeQuery = true

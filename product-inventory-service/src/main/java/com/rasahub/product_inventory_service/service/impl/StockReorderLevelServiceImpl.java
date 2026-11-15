@@ -12,6 +12,7 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockReorderLevelRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockReorderLevelService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,6 +48,9 @@ public class StockReorderLevelServiceImpl implements StockReorderLevelService {
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private AuditLogService auditLogService;
 
     public StockReorderLevelServiceImpl(
             StockReorderLevelRepository stockReorderLevelRepository,
@@ -116,6 +120,17 @@ public class StockReorderLevelServiceImpl implements StockReorderLevelService {
         config.setUpdatedByAccountId(actorId);
 
         StockReorderLevel saved = stockReorderLevelRepository.saveAndFlush(config);
+        auditLogService.record(
+                "STOCK_REORDER_LEVEL",
+                saved.getId(),
+                "CREATED",
+                user.getAccountId(),
+                null,
+                "ACTIVE",
+                "Reorder level: " + saved.getReorderLevel().toPlainString(),
+                null,
+                locationCode
+        );
         if (lowStockAlertEvaluationService != null) {
             lowStockAlertEvaluationService.evaluateItem(locationCode, inventoryItemId);
         }
@@ -144,11 +159,30 @@ public class StockReorderLevelServiceImpl implements StockReorderLevelService {
                 .findForUpdate(locationCode, inventoryItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reorder level configuration not found"));
 
+        BigDecimal previousReorderLevel = config.getReorderLevel();
+        BigDecimal previousRecommendedQuantity =
+                config.getRecommendedReorderQuantity();
         config.setReorderLevel(reorderLevel);
         config.setRecommendedReorderQuantity(recommendedReorderQuantity);
         config.setUpdatedByAccountId(actorId);
 
         StockReorderLevel saved = stockReorderLevelRepository.saveAndFlush(config);
+        auditLogService.record(
+                "STOCK_REORDER_LEVEL",
+                saved.getId(),
+                "UPDATED",
+                user.getAccountId(),
+                config.isActive() ? "ACTIVE" : "INACTIVE",
+                config.isActive() ? "ACTIVE" : "INACTIVE",
+                "Reorder level changed from "
+                        + previousReorderLevel.toPlainString()
+                        + " to " + saved.getReorderLevel().toPlainString()
+                        + "; recommended quantity changed from "
+                        + previousRecommendedQuantity
+                        + " to " + saved.getRecommendedReorderQuantity(),
+                null,
+                locationCode
+        );
         if (lowStockAlertEvaluationService != null) {
             lowStockAlertEvaluationService.evaluateItem(locationCode, inventoryItemId);
         }
@@ -178,8 +212,25 @@ public class StockReorderLevelServiceImpl implements StockReorderLevelService {
         config.setActive(false);
         config.setUpdatedByAccountId(actorId);
         StockReorderLevel saved = stockReorderLevelRepository.saveAndFlush(config);
+        if (wasActive) {
+            auditLogService.record(
+                    "STOCK_REORDER_LEVEL",
+                    saved.getId(),
+                    "DEACTIVATED",
+                    user.getAccountId(),
+                    "ACTIVE",
+                    "INACTIVE",
+                    null,
+                    null,
+                    locationCode
+            );
+        }
         if (wasActive && lowStockAlertEvaluationService != null) {
-            lowStockAlertEvaluationService.closeForMonitoringDisabled(locationCode, inventoryItemId);
+            lowStockAlertEvaluationService.closeForMonitoringDisabled(
+                    locationCode,
+                    inventoryItemId,
+                    actorId
+            );
         }
         return toResponse(saved);
     }
@@ -201,9 +252,23 @@ public class StockReorderLevelServiceImpl implements StockReorderLevelService {
         StockReorderLevel config = stockReorderLevelRepository
                 .findForUpdate(locationCode, inventoryItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reorder level configuration not found"));
+        boolean wasActive = config.isActive();
         config.setActive(true);
         config.setUpdatedByAccountId(actorId);
         StockReorderLevel saved = stockReorderLevelRepository.saveAndFlush(config);
+        if (!wasActive) {
+            auditLogService.record(
+                    "STOCK_REORDER_LEVEL",
+                    saved.getId(),
+                    "REACTIVATED",
+                    user.getAccountId(),
+                    "INACTIVE",
+                    "ACTIVE",
+                    null,
+                    null,
+                    locationCode
+            );
+        }
         if (lowStockAlertEvaluationService != null) {
             lowStockAlertEvaluationService.evaluateItem(locationCode, inventoryItemId);
         }

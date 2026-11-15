@@ -1,6 +1,7 @@
 package com.rasahub.product_inventory_service.repository;
 
 import com.rasahub.product_inventory_service.entity.StockReorderLevel;
+import com.rasahub.product_inventory_service.repository.LocationStockStatusProjection;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -33,6 +34,25 @@ public interface StockReorderLevelRepository extends JpaRepository<StockReorderL
     List<StockReorderLevel> findByActiveTrueAndIdGreaterThanOrderByIdAsc(
             Long afterId,
             Pageable pageable
+    );
+
+    @Query("""
+            SELECT srl.stockLocation.locationCode AS locationCode,
+                   SUM(CASE WHEN COALESCE(balance.quantityOnHand, :zero) > 0
+                                 AND COALESCE(balance.quantityOnHand, :zero)
+                                     <= srl.reorderLevel
+                            THEN 1 ELSE 0 END) AS lowStockCount,
+                   SUM(CASE WHEN COALESCE(balance.quantityOnHand, :zero) = 0
+                            THEN 1 ELSE 0 END) AS outOfStockCount
+            FROM StockReorderLevel srl
+            LEFT JOIN StockBalance balance
+              ON balance.stockLocation = srl.stockLocation
+             AND balance.inventoryItem = srl.inventoryItem
+            WHERE srl.active = true
+            GROUP BY srl.stockLocation.locationCode
+            """)
+    List<LocationStockStatusProjection> summarizeConfiguredStockStatus(
+            @Param("zero") java.math.BigDecimal zero
     );
 
     boolean existsByStockLocation_LocationCodeAndInventoryItem_Id(

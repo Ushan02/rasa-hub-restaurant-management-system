@@ -27,6 +27,7 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockAdjustmentService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -71,6 +72,9 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public StockAdjustmentServiceImpl(
             StockAdjustmentRepository adjustmentRepository,
@@ -216,15 +220,26 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
 
         StockAdjustment adjustment = lockAdjustment(adjustmentId);
         requireCreatorAndManageLocation(user, adjustment);
+        StockAdjustmentStatus previousStatus = adjustment.getStatus();
         try {
             adjustment.submit(user.getAccountId());
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
 
-        return new StockAdjustmentResponse(
-                adjustmentRepository.saveAndFlush(adjustment)
+        StockAdjustment saved = adjustmentRepository.saveAndFlush(adjustment);
+        auditLogService.record(
+                "STOCK_ADJUSTMENT",
+                saved.getId(),
+                "SUBMITTED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                null,
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockAdjustmentResponse(saved);
     }
 
     @Override
@@ -240,15 +255,26 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
                     "Cannot approve an adjustment for an inactive location"
             );
         }
+        StockAdjustmentStatus previousStatus = adjustment.getStatus();
         try {
             adjustment.approve(user.getAccountId());
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
 
-        return new StockAdjustmentResponse(
-                adjustmentRepository.saveAndFlush(adjustment)
+        StockAdjustment saved = adjustmentRepository.saveAndFlush(adjustment);
+        auditLogService.record(
+                "STOCK_ADJUSTMENT",
+                saved.getId(),
+                "APPROVED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                null,
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockAdjustmentResponse(saved);
     }
 
     @Override
@@ -269,6 +295,7 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
         }
 
         StockAdjustment adjustment = lockAdjustment(adjustmentId);
+        StockAdjustmentStatus previousStatus = adjustment.getStatus();
         try {
             adjustment.reject(
                     user.getAccountId(),
@@ -278,9 +305,19 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
             throw new BusinessRuleException(exception.getMessage());
         }
 
-        return new StockAdjustmentResponse(
-                adjustmentRepository.saveAndFlush(adjustment)
+        StockAdjustment saved = adjustmentRepository.saveAndFlush(adjustment);
+        auditLogService.record(
+                "STOCK_ADJUSTMENT",
+                saved.getId(),
+                "REJECTED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                request.getRejectionReason(),
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockAdjustmentResponse(saved);
     }
 
     @Override
@@ -468,6 +505,17 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
         }
 
         StockAdjustment posted = adjustmentRepository.saveAndFlush(adjustment);
+        auditLogService.record(
+                "STOCK_ADJUSTMENT",
+                posted.getId(),
+                "POSTED",
+                user.getAccountId(),
+                StockAdjustmentStatus.APPROVED.name(),
+                posted.getStatus().name(),
+                null,
+                null,
+                locationCode
+        );
         if (lowStockAlertEvaluationService != null) {
             for (StockAdjustmentItem item : items) {
                 lowStockAlertEvaluationService.evaluateItem(locationCode, item.getInventoryItem().getId());

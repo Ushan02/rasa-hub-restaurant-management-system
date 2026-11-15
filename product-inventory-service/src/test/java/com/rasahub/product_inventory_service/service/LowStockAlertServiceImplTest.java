@@ -60,6 +60,9 @@ class LowStockAlertServiceImplTest {
     @Mock
     private InventoryItemRepository inventoryItemRepository;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private LowStockAlertServiceImpl lowStockAlertService;
 
@@ -69,6 +72,11 @@ class LowStockAlertServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(
+                lowStockAlertService,
+                "auditLogService",
+                auditLogService
+        );
         location = new StockLocation("Main", "Main Warehouse", StockLocationType.MAIN_WAREHOUSE);
         item = new InventoryItem("R001", "Rice", "Rice bag", InventoryItemType.RAW_MATERIAL, MeasurementUnit.KG);
         ReflectionTestUtils.setField(item, "id", 1L);

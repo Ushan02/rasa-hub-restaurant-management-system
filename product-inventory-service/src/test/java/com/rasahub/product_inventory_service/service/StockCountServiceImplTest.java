@@ -60,6 +60,8 @@ class StockCountServiceImplTest {
     private StockAdjustmentService stockAdjustmentService;
     @Mock
     private HttpServletRequest servletRequest;
+    @Mock
+    private AuditLogService auditLogService;
 
     private StockCountServiceImpl service;
     private StockLocation branch;
@@ -121,6 +123,7 @@ class StockCountServiceImplTest {
                 "http://127.0.0.1:"
                         + branchServer.getAddress().getPort()
         );
+        ReflectionTestUtils.setField(service, "auditLogService", auditLogService);
         when(servletRequest.getHeader(HttpHeaders.AUTHORIZATION))
                 .thenReturn("Bearer test-token");
         lenient().when(stockLocationRepository.findByIdForUpdate("BR001"))

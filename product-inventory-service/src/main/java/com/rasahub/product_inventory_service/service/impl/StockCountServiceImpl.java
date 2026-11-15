@@ -20,6 +20,7 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockCountRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.StockAdjustmentService;
 import com.rasahub.product_inventory_service.service.StockCountService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,6 +62,9 @@ public class StockCountServiceImpl implements StockCountService {
     private final StockLocationRepository stockLocationRepository;
     private final StockBalanceRepository stockBalanceRepository;
     private final StockAdjustmentService stockAdjustmentService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private AuditLogService auditLogService;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
 
@@ -224,14 +228,25 @@ public class StockCountServiceImpl implements StockCountService {
         validateId(stockCountId);
         StockCount stockCount = lockStockCount(stockCountId);
         requireCreatorAndManageLocation(user, stockCount);
+        StockCountStatus previousStatus = stockCount.getStatus();
         try {
             stockCount.submit(user.getAccountId());
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
-        return new StockCountResponse(
-                stockCountRepository.saveAndFlush(stockCount)
+        StockCount saved = stockCountRepository.saveAndFlush(stockCount);
+        auditLogService.record(
+                "STOCK_COUNT",
+                saved.getId(),
+                "SUBMITTED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                null,
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockCountResponse(saved);
     }
 
     @Override
@@ -241,14 +256,25 @@ public class StockCountServiceImpl implements StockCountService {
         requireAnyRole(user, "OWNER", "MAIN_OFFICE_MANAGER");
         validateId(stockCountId);
         StockCount stockCount = lockStockCount(stockCountId);
+        StockCountStatus previousStatus = stockCount.getStatus();
         try {
             stockCount.approve(user.getAccountId());
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
-        return new StockCountResponse(
-                stockCountRepository.saveAndFlush(stockCount)
+        StockCount saved = stockCountRepository.saveAndFlush(stockCount);
+        auditLogService.record(
+                "STOCK_COUNT",
+                saved.getId(),
+                "APPROVED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                null,
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockCountResponse(saved);
     }
 
     @Override
@@ -268,6 +294,7 @@ public class StockCountServiceImpl implements StockCountService {
             );
         }
         StockCount stockCount = lockStockCount(stockCountId);
+        StockCountStatus previousStatus = stockCount.getStatus();
         try {
             stockCount.reject(
                     user.getAccountId(),
@@ -276,9 +303,19 @@ public class StockCountServiceImpl implements StockCountService {
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
-        return new StockCountResponse(
-                stockCountRepository.saveAndFlush(stockCount)
+        StockCount saved = stockCountRepository.saveAndFlush(stockCount);
+        auditLogService.record(
+                "STOCK_COUNT",
+                saved.getId(),
+                "REJECTED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                request.getRejectionReason(),
+                null,
+                saved.getStockLocation().getLocationCode()
         );
+        return new StockCountResponse(saved);
     }
 
     @Override
@@ -344,9 +381,19 @@ public class StockCountServiceImpl implements StockCountService {
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw new BusinessRuleException(exception.getMessage());
         }
-        return new StockCountResponse(
-                stockCountRepository.saveAndFlush(stockCount)
+        StockCount reconciled = stockCountRepository.saveAndFlush(stockCount);
+        auditLogService.record(
+                "STOCK_COUNT",
+                reconciled.getId(),
+                "RECONCILED",
+                user.getAccountId(),
+                StockCountStatus.APPROVED.name(),
+                reconciled.getStatus().name(),
+                null,
+                null,
+                reconciled.getStockLocation().getLocationCode()
         );
+        return new StockCountResponse(reconciled);
     }
 
     @Override

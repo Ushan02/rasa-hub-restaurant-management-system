@@ -45,6 +45,8 @@ class StockReorderLevelServiceImplTest {
     private LowStockAlertEvaluationService lowStockAlertEvaluationService;
     @Mock
     private StockBalanceRepository stockBalanceRepository;
+    @Mock
+    private AuditLogService auditLogService;
 
     private StockReorderLevelServiceImpl service;
     private StockReorderLevel config;
@@ -58,6 +60,7 @@ class StockReorderLevelServiceImplTest {
                 lowStockAlertEvaluationService,
                 stockBalanceRepository
         );
+        ReflectionTestUtils.setField(service, "auditLogService", auditLogService);
         StockLocation location = new StockLocation("Main", "Main Warehouse", StockLocationType.MAIN_WAREHOUSE);
         InventoryItem item = new InventoryItem(
                 "R001",
@@ -90,7 +93,22 @@ class StockReorderLevelServiceImplTest {
         service.deactivateConfiguration("Main", 1L, null);
 
         assertFalse(config.isActive());
-        verify(lowStockAlertEvaluationService).closeForMonitoringDisabled("Main", 1L);
+        verify(lowStockAlertEvaluationService).closeForMonitoringDisabled(
+                "Main",
+                1L,
+                91L
+        );
+        verify(auditLogService).record(
+                "STOCK_REORDER_LEVEL",
+                null,
+                "DEACTIVATED",
+                91L,
+                "ACTIVE",
+                "INACTIVE",
+                null,
+                null,
+                "Main"
+        );
         verify(lowStockAlertEvaluationService, never()).evaluateItem("Main", 1L);
     }
 

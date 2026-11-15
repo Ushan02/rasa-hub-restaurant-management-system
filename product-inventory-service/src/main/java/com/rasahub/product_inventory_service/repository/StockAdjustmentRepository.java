@@ -2,6 +2,7 @@ package com.rasahub.product_inventory_service.repository;
 
 import com.rasahub.product_inventory_service.entity.StockAdjustment;
 import com.rasahub.product_inventory_service.enums.StockAdjustmentStatus;
+import com.rasahub.product_inventory_service.repository.LocationCountProjection;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +18,17 @@ import java.util.Optional;
 
 public interface StockAdjustmentRepository
         extends JpaRepository<StockAdjustment, Long> {
+
+    @Query("""
+            SELECT adjustment.stockLocation.locationCode AS locationCode,
+                   COUNT(adjustment.id) AS recordCount
+            FROM StockAdjustment adjustment
+            WHERE adjustment.status = :status
+            GROUP BY adjustment.stockLocation.locationCode
+            """)
+    List<LocationCountProjection> countByStatusGroupedByLocation(
+            @Param("status") StockAdjustmentStatus status
+    );
 
     @EntityGraph(attributePaths = "stockLocation")
     Page<StockAdjustment> findAllByOrderByCreatedAtDescIdDesc(

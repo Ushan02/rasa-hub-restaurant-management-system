@@ -20,6 +20,7 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockReorderLevelRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,9 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
     private final InventoryItemRepository inventoryItemRepository;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public LowStockAlertServiceImpl(
             StockReorderLevelRepository stockReorderLevelRepository,
@@ -135,12 +139,25 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
 
         requireReadLocation(user, alert.getStockLocation().getLocationCode());
 
+        AlertStatus previousStatus = alert.getStatus();
         try {
             alert.acknowledge(resolvedAccountId, remarks);
         } catch (IllegalStateException | IllegalArgumentException exception) {
             throw new ConflictException(exception.getMessage());
         }
-        return LowStockAlertResponse.from(lowStockAlertRepository.saveAndFlush(alert));
+        LowStockAlert saved = lowStockAlertRepository.saveAndFlush(alert);
+        auditLogService.record(
+                "LOW_STOCK_ALERT",
+                saved.getId(),
+                "ACKNOWLEDGED",
+                resolvedAccountId,
+                previousStatus.name(),
+                saved.getStatus().name(),
+                remarks,
+                null,
+                saved.getStockLocation().getLocationCode()
+        );
+        return LowStockAlertResponse.from(saved);
     }
 
     @Override
@@ -176,12 +193,25 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
         if (StockStatus.fromQuantity(quantity, config.getReorderLevel()) != StockStatus.NORMAL) {
             throw new ConflictException("An active stock shortage cannot be manually resolved");
         }
+        AlertStatus previousStatus = alert.getStatus();
         try {
             alert.resolveAsRecovered(remarks);
         } catch (IllegalStateException exception) {
             throw new ConflictException(exception.getMessage());
         }
-        return LowStockAlertResponse.from(lowStockAlertRepository.saveAndFlush(alert));
+        LowStockAlert saved = lowStockAlertRepository.saveAndFlush(alert);
+        auditLogService.record(
+                "LOW_STOCK_ALERT",
+                saved.getId(),
+                "RECOVERED",
+                user.getAccountId(),
+                previousStatus.name(),
+                saved.getStatus().name(),
+                remarks,
+                null,
+                saved.getStockLocation().getLocationCode()
+        );
+        return LowStockAlertResponse.from(saved);
     }
 
     @Override
@@ -215,7 +245,19 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
             if (!activeAlerts.isEmpty()) {
                 LowStockAlert resolvedAlert = activeAlerts.getFirst();
                 for (LowStockAlert activeAlert : activeAlerts) {
+                    AlertStatus previousStatus = activeAlert.getStatus();
                     activeAlert.resolveAsRecovered("Stock returned to normal");
+                    auditLogService.record(
+                            "LOW_STOCK_ALERT",
+                            activeAlert.getId(),
+                            "RECOVERED",
+                            authenticatedAccountIdOrNull(),
+                            previousStatus.name(),
+                            activeAlert.getStatus().name(),
+                            "Stock returned to normal",
+                            null,
+                            locationCode
+                    );
                 }
                 lowStockAlertRepository.saveAllAndFlush(activeAlerts);
                 return resolvedAlert;
@@ -242,11 +284,24 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
                     LocalDateTime.now(),
                     "System-evaluated alert"
             );
-            return lowStockAlertRepository.saveAndFlush(alert);
+            LowStockAlert saved = lowStockAlertRepository.saveAndFlush(alert);
+            auditLogService.record(
+                    "LOW_STOCK_ALERT",
+                    saved.getId(),
+                    "CREATED",
+                    authenticatedAccountIdOrNull(),
+                    null,
+                    saved.getStatus().name(),
+                    "System-evaluated alert",
+                    null,
+                    locationCode
+            );
+            return saved;
         }
 
         LowStockAlert activeAlert = activeAlerts.getFirst();
         if (activeAlert.getSeverity() != severity) {
+            AlertSeverity previousSeverity = activeAlert.getSeverity();
             activeAlert.updateEvaluation(
                     config.getReorderLevel(),
                     currentQuantity,
@@ -254,7 +309,19 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
                     LocalDateTime.now(),
                     "Severity updated due to stock movement"
             );
-            return lowStockAlertRepository.saveAndFlush(activeAlert);
+            LowStockAlert saved = lowStockAlertRepository.saveAndFlush(activeAlert);
+            auditLogService.record(
+                    "LOW_STOCK_ALERT",
+                    saved.getId(),
+                    "SEVERITY_CHANGED",
+                    authenticatedAccountIdOrNull(),
+                    previousSeverity.name(),
+                    severity.name(),
+                    "Severity updated due to stock movement",
+                    null,
+                    locationCode
+            );
+            return saved;
         }
 
         activeAlert.updateEvaluation(
@@ -301,7 +368,11 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
 
     @Override
     @Transactional
-    public void closeForMonitoringDisabled(String locationCode, Long inventoryItemId) {
+    public void closeForMonitoringDisabled(
+            String locationCode,
+            Long inventoryItemId,
+            Long actorAccountId
+    ) {
         List<LowStockAlert> activeAlerts = lowStockAlertRepository.findActiveForUpdate(
                 locationCode,
                 inventoryItemId,
@@ -310,8 +381,34 @@ public class LowStockAlertServiceImpl implements LowStockAlertEvaluationService 
         if (activeAlerts.isEmpty()) {
             return;
         }
-        activeAlerts.forEach(LowStockAlert::closeMonitoringDisabled);
+        for (LowStockAlert alert : activeAlerts) {
+            AlertStatus previousStatus = alert.getStatus();
+            alert.closeMonitoringDisabled();
+            auditLogService.record(
+                    "LOW_STOCK_ALERT",
+                    alert.getId(),
+                    "MONITORING_DISABLED",
+                    actorAccountId,
+                    previousStatus.name(),
+                    alert.getStatus().name(),
+                    "Monitoring disabled for this item and location",
+                    null,
+                    locationCode
+            );
+        }
         lowStockAlertRepository.saveAllAndFlush(activeAlerts);
+    }
+
+    private Long authenticatedAccountIdOrNull() {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal()
+                instanceof ProductUserPrincipal principal)) {
+            return null;
+        }
+        return principal.getAccountId();
     }
 
     @Override

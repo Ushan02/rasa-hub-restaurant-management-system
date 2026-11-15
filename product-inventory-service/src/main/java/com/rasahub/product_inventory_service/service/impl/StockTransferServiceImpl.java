@@ -9,6 +9,7 @@ import com.rasahub.product_inventory_service.exception.BusinessRuleException;
 import com.rasahub.product_inventory_service.exception.ResourceNotFoundException;
 import com.rasahub.product_inventory_service.repository.*;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockTransferService;
 
@@ -58,6 +59,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
+
+    @Autowired
+    private AuditLogService auditLogService;
 
     public StockTransferServiceImpl(
             StockTransferRepository transferRepository,
@@ -502,6 +506,17 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer dispatched = transferRepository.saveAndFlush(transfer);
+        auditLogService.record(
+                "STOCK_TRANSFER",
+                dispatched.getId(),
+                "DISPATCHED",
+                user.getAccountId(),
+                StockTransferStatus.DRAFT.name(),
+                dispatched.getStatus().name(),
+                null,
+                null,
+                dispatched.getDestinationLocation().getLocationCode()
+        );
         if (lowStockAlertEvaluationService != null) {
             for (StockTransferItem line : lines) {
                 lowStockAlertEvaluationService.evaluateItem(MAIN, line.getInventoryItem().getId());
@@ -533,6 +548,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer transfer =
                 lockedTransferAndRequest(transferId);
+        StockTransferStatus previousStatus = transfer.getStatus();
 
         if (transfer.getStatus() != StockTransferStatus.DISPATCHED) {
             throw new BusinessRuleException(
@@ -615,6 +631,17 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer received = transferRepository.saveAndFlush(transfer);
+        auditLogService.record(
+                "STOCK_TRANSFER",
+                received.getId(),
+                "RECEIVED",
+                user.getAccountId(),
+                previousStatus.name(),
+                received.getStatus().name(),
+                null,
+                null,
+                branchCode
+        );
         if (lowStockAlertEvaluationService != null) {
             for (StockTransferItem line : lines) {
                 lowStockAlertEvaluationService.evaluateItem(branchCode, line.getInventoryItem().getId());
@@ -651,6 +678,7 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         StockTransfer transfer =
                 lockedTransferAndRequest(transferId);
+        StockTransferStatus previousStatus = transfer.getStatus();
 
         if ("STOCK_KEEPER".equals(user.getRole())
                 && !user.getAccountId()
@@ -670,9 +698,19 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new BusinessRuleException(ex.getMessage());
         }
 
-        return new StockTransferResponse(
-                transferRepository.saveAndFlush(transfer)
+        StockTransfer cancelled = transferRepository.saveAndFlush(transfer);
+        auditLogService.record(
+                "STOCK_TRANSFER",
+                cancelled.getId(),
+                "CANCELLED",
+                user.getAccountId(),
+                previousStatus.name(),
+                cancelled.getStatus().name(),
+                input.getCancellationReason(),
+                null,
+                cancelled.getDestinationLocation().getLocationCode()
         );
+        return new StockTransferResponse(cancelled);
     }
 
     private StockTransfer lockedTransferAndRequest(Long transferId) {

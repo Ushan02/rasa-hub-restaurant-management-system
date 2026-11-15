@@ -29,6 +29,7 @@ import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
 import com.rasahub.product_inventory_service.service.GoodsReceiptService;
+import com.rasahub.product_inventory_service.service.AuditLogService;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 
 import org.springframework.data.domain.Page;
@@ -61,6 +62,9 @@ public class GoodsReceiptServiceImpl
     private final StockBalanceRepository stockBalanceRepository;
     private final StockMovementRepository stockMovementRepository;
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private AuditLogService auditLogService;
 
     public GoodsReceiptServiceImpl(
             GoodsReceiptNoteRepository goodsReceiptNoteRepository,
@@ -287,6 +291,7 @@ public class GoodsReceiptServiceImpl
                         )
                 );
 
+        PurchaseOrderStatus previousOrderStatus = purchaseOrder.getStatus();
         validateReceivablePurchaseOrder(purchaseOrder);
 
         StockLocation location = grn.getReceivingLocation();
@@ -434,6 +439,31 @@ public class GoodsReceiptServiceImpl
         GoodsReceiptNote savedGrn =
                 goodsReceiptNoteRepository.saveAndFlush(grn);
 
+        auditLogService.record(
+                "GOODS_RECEIPT",
+                savedGrn.getId(),
+                "CONFIRMED",
+                user.getAccountId(),
+                GoodsReceiptStatus.SUBMITTED.name(),
+                savedGrn.getStatus().name(),
+                null,
+                "PURCHASE_ORDER:" + purchaseOrder.getId(),
+                location.getLocationCode()
+        );
+        if (previousOrderStatus != purchaseOrder.getStatus()) {
+            auditLogService.record(
+                    "PURCHASE_ORDER",
+                    purchaseOrder.getId(),
+                    "RECEIPT_STATUS_CHANGED",
+                    user.getAccountId(),
+                    previousOrderStatus.name(),
+                    purchaseOrder.getStatus().name(),
+                    null,
+                    "GOODS_RECEIPT:" + savedGrn.getId(),
+                    location.getLocationCode()
+            );
+        }
+
         if (lowStockAlertEvaluationService != null) {
             for (GoodsReceiptItem receiptItem : receiptItems) {
                 lowStockAlertEvaluationService.evaluateItem(
@@ -494,6 +524,17 @@ public class GoodsReceiptServiceImpl
             );
         }
 
+        auditLogService.record(
+                "GOODS_RECEIPT",
+                grn.getId(),
+                "REJECTED",
+                user.getAccountId(),
+                GoodsReceiptStatus.SUBMITTED.name(),
+                grn.getStatus().name(),
+                request.getRejectionReason(),
+                "PURCHASE_ORDER:" + grn.getPurchaseOrder().getId(),
+                grn.getReceivingLocation().getLocationCode()
+        );
         return new GoodsReceiptResponse(
                 goodsReceiptNoteRepository.saveAndFlush(grn)
         );
