@@ -1,6 +1,7 @@
 package com.rasahub.product_inventory_service.entity;
 
 import com.rasahub.product_inventory_service.enums.AlertSeverity;
+import com.rasahub.product_inventory_service.enums.AlertResolutionReason;
 import com.rasahub.product_inventory_service.enums.AlertStatus;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
@@ -15,14 +16,12 @@ import java.time.LocalDateTime;
         name = "low_stock_alerts",
         indexes = {
                 @Index(
-                        name = "idx_low_stock_alerts_active",
+                        name = "idx_low_stock_alerts_location_item_status",
                         columnList = "location_code, inventory_item_id, status"
-                )
-        },
-        uniqueConstraints = {
-                @UniqueConstraint(
-                        name = "uk_low_stock_alerts_location_item_status",
-                        columnNames = {"location_code", "inventory_item_id", "status"}
+                ),
+                @Index(
+                        name = "idx_low_stock_alerts_active_location_item",
+                        columnList = "location_code, inventory_item_id, status, detected_at"
                 )
         }
 )
@@ -82,6 +81,10 @@ public class LowStockAlert {
 
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resolution_reason", length = 30)
+    private AlertResolutionReason resolutionReason;
 
     @Column(name = "last_evaluated_at")
     private LocalDateTime lastEvaluatedAt;
@@ -183,6 +186,10 @@ public class LowStockAlert {
         return resolvedAt;
     }
 
+    public AlertResolutionReason getResolutionReason() {
+        return resolutionReason;
+    }
+
     public LocalDateTime getLastEvaluatedAt() {
         return lastEvaluatedAt;
     }
@@ -204,12 +211,15 @@ public class LowStockAlert {
     }
 
     public boolean isActive() {
-        return status != AlertStatus.RESOLVED;
+        return status == AlertStatus.OPEN || status == AlertStatus.ACKNOWLEDGED;
     }
 
     public void acknowledge(Long accountId, String remarks) {
-        if (status == AlertStatus.RESOLVED) {
-            throw new IllegalStateException("Resolved alert cannot be acknowledged");
+        if (status != AlertStatus.OPEN) {
+            throw new IllegalStateException("Only an open alert can be acknowledged");
+        }
+        if (accountId == null || accountId <= 0) {
+            throw new IllegalArgumentException("Valid account ID is required");
         }
         this.acknowledgedByAccountId = accountId;
         this.acknowledgedAt = LocalDateTime.now();
@@ -217,10 +227,26 @@ public class LowStockAlert {
         this.remarks = remarks;
     }
 
-    public void resolve(String remarks) {
+    public void resolveAsRecovered(String remarks) {
+        requireActive();
         this.status = AlertStatus.RESOLVED;
         this.resolvedAt = LocalDateTime.now();
+        this.resolutionReason = AlertResolutionReason.STOCK_RECOVERED;
         this.remarks = remarks;
+    }
+
+    public void closeMonitoringDisabled() {
+        requireActive();
+        this.status = AlertStatus.RESOLVED;
+        this.resolvedAt = LocalDateTime.now();
+        this.resolutionReason = AlertResolutionReason.MONITORING_DISABLED;
+        this.remarks = "Monitoring disabled for this location/item";
+    }
+
+    private void requireActive() {
+        if (!isActive()) {
+            throw new IllegalStateException("Only an active alert can be resolved");
+        }
     }
 
     public void updateEvaluation(
@@ -236,10 +262,6 @@ public class LowStockAlert {
         this.lastEvaluatedAt = evaluatedAt;
         if (remarks != null && !remarks.isBlank()) {
             this.remarks = remarks;
-        }
-        if (this.status == AlertStatus.RESOLVED) {
-            this.status = AlertStatus.OPEN;
-            this.detectedAt = evaluatedAt;
         }
     }
 }

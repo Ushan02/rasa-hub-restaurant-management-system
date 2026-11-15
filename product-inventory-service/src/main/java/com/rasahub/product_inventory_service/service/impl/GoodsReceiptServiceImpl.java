@@ -29,6 +29,7 @@ import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
 import com.rasahub.product_inventory_service.service.GoodsReceiptService;
+import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -59,6 +60,7 @@ public class GoodsReceiptServiceImpl
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final StockBalanceRepository stockBalanceRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
 
     public GoodsReceiptServiceImpl(
             GoodsReceiptNoteRepository goodsReceiptNoteRepository,
@@ -66,10 +68,28 @@ public class GoodsReceiptServiceImpl
             StockBalanceRepository stockBalanceRepository,
             StockMovementRepository stockMovementRepository
     ) {
+        this(
+                goodsReceiptNoteRepository,
+                purchaseOrderRepository,
+                stockBalanceRepository,
+                stockMovementRepository,
+                null
+        );
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public GoodsReceiptServiceImpl(
+            GoodsReceiptNoteRepository goodsReceiptNoteRepository,
+            PurchaseOrderRepository purchaseOrderRepository,
+            StockBalanceRepository stockBalanceRepository,
+            StockMovementRepository stockMovementRepository,
+            LowStockAlertEvaluationService lowStockAlertEvaluationService
+    ) {
         this.goodsReceiptNoteRepository = goodsReceiptNoteRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockMovementRepository = stockMovementRepository;
+        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
     }
 
     @Override
@@ -413,6 +433,15 @@ public class GoodsReceiptServiceImpl
 
         GoodsReceiptNote savedGrn =
                 goodsReceiptNoteRepository.saveAndFlush(grn);
+
+        if (lowStockAlertEvaluationService != null) {
+            for (GoodsReceiptItem receiptItem : receiptItems) {
+                lowStockAlertEvaluationService.evaluateItem(
+                        location.getLocationCode(),
+                        receiptItem.getInventoryItem().getId()
+                );
+            }
+        }
 
         stockBalanceRepository.flush();
         stockMovementRepository.flush();

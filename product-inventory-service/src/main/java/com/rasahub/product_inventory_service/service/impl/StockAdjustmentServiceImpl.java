@@ -27,8 +27,10 @@ import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockAdjustmentService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -68,6 +70,7 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
     private final StockMovementRepository stockMovementRepository;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
+    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
 
     public StockAdjustmentServiceImpl(
             StockAdjustmentRepository adjustmentRepository,
@@ -78,12 +81,36 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
             HttpServletRequest servletRequest,
             @Value("${branch.sync.auth-base-url}") String authBaseUrl
     ) {
+        this(
+                adjustmentRepository,
+                inventoryItemRepository,
+                stockLocationRepository,
+                stockBalanceRepository,
+                stockMovementRepository,
+                servletRequest,
+                authBaseUrl,
+                null
+        );
+    }
+
+    @Autowired
+    public StockAdjustmentServiceImpl(
+            StockAdjustmentRepository adjustmentRepository,
+            InventoryItemRepository inventoryItemRepository,
+            StockLocationRepository stockLocationRepository,
+            StockBalanceRepository stockBalanceRepository,
+            StockMovementRepository stockMovementRepository,
+            HttpServletRequest servletRequest,
+            @Value("${branch.sync.auth-base-url}") String authBaseUrl,
+            LowStockAlertEvaluationService lowStockAlertEvaluationService
+    ) {
         this.adjustmentRepository = adjustmentRepository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.servletRequest = servletRequest;
+        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
 
         SimpleClientHttpRequestFactory requestFactory =
                 new SimpleClientHttpRequestFactory();
@@ -440,7 +467,13 @@ public class StockAdjustmentServiceImpl implements StockAdjustmentService {
             throw new BusinessRuleException(exception.getMessage());
         }
 
-        return adjustmentRepository.saveAndFlush(adjustment);
+        StockAdjustment posted = adjustmentRepository.saveAndFlush(adjustment);
+        if (lowStockAlertEvaluationService != null) {
+            for (StockAdjustmentItem item : items) {
+                lowStockAlertEvaluationService.evaluateItem(locationCode, item.getInventoryItem().getId());
+            }
+        }
+        return posted;
     }
 
     @Override

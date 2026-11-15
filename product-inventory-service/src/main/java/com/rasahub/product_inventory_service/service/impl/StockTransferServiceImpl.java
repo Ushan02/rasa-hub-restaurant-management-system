@@ -9,12 +9,14 @@ import com.rasahub.product_inventory_service.exception.BusinessRuleException;
 import com.rasahub.product_inventory_service.exception.ResourceNotFoundException;
 import com.rasahub.product_inventory_service.repository.*;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
+import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockTransferService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,6 +57,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final EntityManager entityManager;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
+    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
 
     public StockTransferServiceImpl(
             StockTransferRepository transferRepository,
@@ -67,6 +70,33 @@ public class StockTransferServiceImpl implements StockTransferService {
             HttpServletRequest servletRequest,
             @Value("${branch.sync.auth-base-url}") String authBaseUrl
     ) {
+        this(
+                transferRepository,
+                requestRepository,
+                locationRepository,
+                itemRepository,
+                balanceRepository,
+                movementRepository,
+                entityManager,
+                servletRequest,
+                authBaseUrl,
+                null
+        );
+    }
+
+    @Autowired
+    public StockTransferServiceImpl(
+            StockTransferRepository transferRepository,
+            BranchStockRequestRepository requestRepository,
+            StockLocationRepository locationRepository,
+            InventoryItemRepository itemRepository,
+            StockBalanceRepository balanceRepository,
+            StockMovementRepository movementRepository,
+            EntityManager entityManager,
+            HttpServletRequest servletRequest,
+            @Value("${branch.sync.auth-base-url}") String authBaseUrl,
+            LowStockAlertEvaluationService lowStockAlertEvaluationService
+    ) {
         this.transferRepository = transferRepository;
         this.requestRepository = requestRepository;
         this.locationRepository = locationRepository;
@@ -75,6 +105,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         this.movementRepository = movementRepository;
         this.entityManager = entityManager;
         this.servletRequest = servletRequest;
+        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
 
         SimpleClientHttpRequestFactory factory =
                 new SimpleClientHttpRequestFactory();
@@ -470,9 +501,13 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new BusinessRuleException(ex.getMessage());
         }
 
-        return new StockTransferResponse(
-                transferRepository.saveAndFlush(transfer)
-        );
+        StockTransfer dispatched = transferRepository.saveAndFlush(transfer);
+        if (lowStockAlertEvaluationService != null) {
+            for (StockTransferItem line : lines) {
+                lowStockAlertEvaluationService.evaluateItem(MAIN, line.getInventoryItem().getId());
+            }
+        }
+        return new StockTransferResponse(dispatched);
     }
 
     @Override
@@ -579,9 +614,13 @@ public class StockTransferServiceImpl implements StockTransferService {
             throw new BusinessRuleException(ex.getMessage());
         }
 
-        return new StockTransferResponse(
-                transferRepository.saveAndFlush(transfer)
-        );
+        StockTransfer received = transferRepository.saveAndFlush(transfer);
+        if (lowStockAlertEvaluationService != null) {
+            for (StockTransferItem line : lines) {
+                lowStockAlertEvaluationService.evaluateItem(branchCode, line.getInventoryItem().getId());
+            }
+        }
+        return new StockTransferResponse(received);
     }
 
     @Override

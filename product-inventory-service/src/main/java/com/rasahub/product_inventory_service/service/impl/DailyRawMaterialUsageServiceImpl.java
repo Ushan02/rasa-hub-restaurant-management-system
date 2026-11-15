@@ -24,9 +24,11 @@ import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockMovementRepository;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
 import com.rasahub.product_inventory_service.service.DailyRawMaterialUsageService;
+import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -63,6 +65,7 @@ public class DailyRawMaterialUsageServiceImpl
     private final StockMovementRepository stockMovementRepository;
     private final HttpServletRequest servletRequest;
     private final RestClient authClient;
+    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
 
     public DailyRawMaterialUsageServiceImpl(
             DailyRawMaterialUsageRepository usageRepository,
@@ -73,12 +76,36 @@ public class DailyRawMaterialUsageServiceImpl
             HttpServletRequest servletRequest,
             @Value("${branch.sync.auth-base-url}") String authBaseUrl
     ) {
+        this(
+                usageRepository,
+                inventoryItemRepository,
+                stockLocationRepository,
+                stockBalanceRepository,
+                stockMovementRepository,
+                servletRequest,
+                authBaseUrl,
+                null
+        );
+    }
+
+    @Autowired
+    public DailyRawMaterialUsageServiceImpl(
+            DailyRawMaterialUsageRepository usageRepository,
+            InventoryItemRepository inventoryItemRepository,
+            StockLocationRepository stockLocationRepository,
+            StockBalanceRepository stockBalanceRepository,
+            StockMovementRepository stockMovementRepository,
+            HttpServletRequest servletRequest,
+            @Value("${branch.sync.auth-base-url}") String authBaseUrl,
+            LowStockAlertEvaluationService lowStockAlertEvaluationService
+    ) {
         this.usageRepository = usageRepository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.servletRequest = servletRequest;
+        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
         this.authClient = RestClient.builder()
                 .baseUrl(authBaseUrl)
                 .build();
@@ -307,6 +334,11 @@ public class DailyRawMaterialUsageServiceImpl
 
         usage.post(user.getAccountId());
         DailyRawMaterialUsage saved = usageRepository.saveAndFlush(usage);
+        if (lowStockAlertEvaluationService != null) {
+            for (DailyRawMaterialUsageItem usageItem : itemsInLockOrder) {
+                lowStockAlertEvaluationService.evaluateItem(branchCode, usageItem.getInventoryItem().getId());
+            }
+        }
         return new DailyRawMaterialUsageResponse(saved);
     }
 

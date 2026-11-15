@@ -5,6 +5,7 @@ import com.rasahub.product_inventory_service.enums.AlertStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,14 +15,21 @@ import java.util.Optional;
 
 public interface LowStockAlertRepository extends JpaRepository<LowStockAlert, Long> {
 
+    @Override
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
+    Optional<LowStockAlert> findById(Long id);
+
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
     List<LowStockAlert> findByStockLocation_LocationCodeOrderByDetectedAtDesc(
             String locationCode
     );
 
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
     List<LowStockAlert> findByInventoryItem_IdOrderByDetectedAtDesc(
             Long inventoryItemId
     );
 
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
     List<LowStockAlert> findByStockLocation_LocationCodeAndInventoryItem_IdOrderByDetectedAtDesc(
             String locationCode,
             Long inventoryItemId
@@ -39,7 +47,13 @@ public interface LowStockAlertRepository extends JpaRepository<LowStockAlert, Lo
             Collection<AlertStatus> statuses
     );
 
+    long countByStockLocation_LocationCodeAndStatusIn(
+            String locationCode,
+            Collection<AlertStatus> statuses
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
     @Query("""
             SELECT la
             FROM LowStockAlert la

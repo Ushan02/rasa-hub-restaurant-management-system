@@ -1,7 +1,9 @@
 package com.rasahub.product_inventory_service.controller;
 
-import com.rasahub.product_inventory_service.entity.StockReorderLevel;
+import com.rasahub.product_inventory_service.dto.stockreorderlevel.StockReorderLevelRequest;
+import com.rasahub.product_inventory_service.dto.stockreorderlevel.StockReorderLevelResponse;
 import com.rasahub.product_inventory_service.service.StockReorderLevelService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -20,16 +22,16 @@ public class StockReorderLevelController {
     }
 
     @GetMapping("/location/{locationCode}")
-    @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'ACCOUNTANT', 'STOCK_KEEPER')")
-    public ResponseEntity<List<StockReorderLevel>> getConfigurationsByLocation(
+    @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'ACCOUNTANT', 'STOCK_KEEPER', 'BRANCH_MANAGER')")
+    public ResponseEntity<List<StockReorderLevelResponse>> getConfigurationsByLocation(
             @PathVariable String locationCode
     ) {
         return ResponseEntity.ok(stockReorderLevelService.getConfigurationsByLocation(locationCode));
     }
 
     @GetMapping("/location/{locationCode}/item/{inventoryItemId}")
-    @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'ACCOUNTANT', 'STOCK_KEEPER')")
-    public ResponseEntity<StockReorderLevel> getConfiguration(
+    @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'ACCOUNTANT', 'STOCK_KEEPER', 'BRANCH_MANAGER')")
+    public ResponseEntity<StockReorderLevelResponse> getConfiguration(
             @PathVariable String locationCode,
             @PathVariable Long inventoryItemId
     ) {
@@ -41,56 +43,66 @@ public class StockReorderLevelController {
 
     @PostMapping("/location/{locationCode}/item/{inventoryItemId}")
     @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'STOCK_KEEPER')")
-    public ResponseEntity<StockReorderLevel> createConfiguration(
+    public ResponseEntity<StockReorderLevelResponse> createConfiguration(
             @PathVariable String locationCode,
             @PathVariable Long inventoryItemId,
-            @RequestParam BigDecimal reorderLevel,
-            @RequestParam(required = false) BigDecimal recommendedReorderQuantity,
-            @RequestParam(required = false) Long createdByAccountId
+            @Valid @ModelAttribute StockReorderLevelRequest request
     ) {
         return ResponseEntity.ok(
                 stockReorderLevelService.createConfiguration(
                         locationCode,
                         inventoryItemId,
-                        reorderLevel,
-                        recommendedReorderQuantity,
-                        createdByAccountId
+                        request.reorderLevel(),
+                        request.recommendedReorderQuantity(),
+                        null
                 )
         );
     }
 
     @PutMapping("/location/{locationCode}/item/{inventoryItemId}")
     @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'STOCK_KEEPER')")
-    public ResponseEntity<StockReorderLevel> updateConfiguration(
+    public ResponseEntity<StockReorderLevelResponse> updateConfiguration(
             @PathVariable String locationCode,
             @PathVariable Long inventoryItemId,
-            @RequestParam BigDecimal reorderLevel,
-            @RequestParam(required = false) BigDecimal recommendedReorderQuantity,
-            @RequestParam(required = false) Long updatedByAccountId
+            @Valid @ModelAttribute StockReorderLevelRequest request
     ) {
         return ResponseEntity.ok(
                 stockReorderLevelService.updateConfiguration(
                         locationCode,
                         inventoryItemId,
-                        reorderLevel,
-                        recommendedReorderQuantity,
-                        updatedByAccountId
+                        request.reorderLevel(),
+                        request.recommendedReorderQuantity(),
+                        null
                 )
         );
     }
 
     @PatchMapping("/location/{locationCode}/item/{inventoryItemId}/deactivate")
     @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'STOCK_KEEPER')")
-    public ResponseEntity<StockReorderLevel> deactivateConfiguration(
+    public ResponseEntity<StockReorderLevelResponse> deactivateConfiguration(
             @PathVariable String locationCode,
-            @PathVariable Long inventoryItemId,
-            @RequestParam(required = false) Long updatedByAccountId
+            @PathVariable Long inventoryItemId
     ) {
         return ResponseEntity.ok(
                 stockReorderLevelService.deactivateConfiguration(
                         locationCode,
                         inventoryItemId,
-                        updatedByAccountId
+                        null
+                )
+        );
+    }
+
+    @PatchMapping("/location/{locationCode}/item/{inventoryItemId}/activate")
+    @PreAuthorize("hasAnyRole('OWNER', 'MAIN_OFFICE_MANAGER', 'STOCK_KEEPER')")
+    public ResponseEntity<StockReorderLevelResponse> reactivateConfiguration(
+            @PathVariable String locationCode,
+            @PathVariable Long inventoryItemId
+    ) {
+        return ResponseEntity.ok(
+                stockReorderLevelService.reactivateConfiguration(
+                        locationCode,
+                        inventoryItemId,
+                        null
                 )
         );
     }

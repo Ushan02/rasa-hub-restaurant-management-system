@@ -9,4 +9,10 @@ public interface LowStockAlertEvaluationService extends LowStockAlertService {
     LowStockAlert evaluateItem(String locationCode, Long inventoryItemId);
 
     List<LowStockAlert> evaluateLocation(String locationCode);
+
+    LowStockAlert evaluateItemAuthorized(String locationCode, Long inventoryItemId);
+
+    List<LowStockAlert> evaluateLocationAuthorized(String locationCode);
+
+    void closeForMonitoringDisabled(String locationCode, Long inventoryItemId);
 }

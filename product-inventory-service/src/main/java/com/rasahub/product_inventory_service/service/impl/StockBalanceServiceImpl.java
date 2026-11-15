@@ -7,11 +7,13 @@ import com.rasahub.product_inventory_service.entity.InventoryItem;
 import com.rasahub.product_inventory_service.entity.StockBalance;
 import com.rasahub.product_inventory_service.entity.StockLocation;
 import com.rasahub.product_inventory_service.enums.MeasurementUnit;
+import com.rasahub.product_inventory_service.enums.StockStatus;
 import com.rasahub.product_inventory_service.exception.BusinessRuleException;
 import com.rasahub.product_inventory_service.exception.ResourceNotFoundException;
 import com.rasahub.product_inventory_service.repository.InventoryItemRepository;
 import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
+import com.rasahub.product_inventory_service.repository.StockReorderLevelRepository;
 import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockBalanceService;
 
@@ -30,13 +32,21 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     private final StockLocationRepository stockLocationRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
+    private final StockReorderLevelRepository stockReorderLevelRepository;
 
     public StockBalanceServiceImpl(
             StockBalanceRepository stockBalanceRepository,
             StockLocationRepository stockLocationRepository,
-            InventoryItemRepository inventoryItemRepository
+            InventoryItemRepository inventoryItemRepository,
+            StockReorderLevelRepository stockReorderLevelRepository
     ) {
-        this(stockBalanceRepository, stockLocationRepository, inventoryItemRepository, null);
+        this(
+                stockBalanceRepository,
+                stockLocationRepository,
+                inventoryItemRepository,
+                stockReorderLevelRepository,
+                null
+        );
     }
 
     @Autowired
@@ -44,12 +54,14 @@ public class StockBalanceServiceImpl implements StockBalanceService {
             StockBalanceRepository stockBalanceRepository,
             StockLocationRepository stockLocationRepository,
             InventoryItemRepository inventoryItemRepository,
+            StockReorderLevelRepository stockReorderLevelRepository,
             LowStockAlertEvaluationService lowStockAlertEvaluationService
     ) {
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.inventoryItemRepository = inventoryItemRepository;
         this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
+        this.stockReorderLevelRepository = stockReorderLevelRepository;
     }
 
     @Override
@@ -113,7 +125,18 @@ public class StockBalanceServiceImpl implements StockBalanceService {
                         location.getLocationCode()
                 )
                 .stream()
-                .filter(StockBalance::isLowStock)
+                .filter(balance -> {
+                    BigDecimal threshold = stockReorderLevelRepository
+                            .findByStockLocation_LocationCodeAndInventoryItem_Id(
+                                    location.getLocationCode(),
+                                    balance.getInventoryItem().getId()
+                            )
+                            .filter(config -> config.isActive())
+                            .map(config -> config.getReorderLevel())
+                            .orElse(balance.getMinimumStockLevel());
+
+                    return StockStatus.fromQuantity(balance.getQuantityOnHand(), threshold) != StockStatus.NORMAL;
+                })
                 .map(StockBalanceResponse::new)
                 .toList();
     }
