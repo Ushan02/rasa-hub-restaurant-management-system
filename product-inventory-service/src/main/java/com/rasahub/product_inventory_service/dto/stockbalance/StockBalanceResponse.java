@@ -3,6 +3,7 @@ package com.rasahub.product_inventory_service.dto.stockbalance;
 
 import com.rasahub.product_inventory_service.entity.StockBalance;
 import com.rasahub.product_inventory_service.enums.MeasurementUnit;
+import com.rasahub.product_inventory_service.enums.StockStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,12 +19,14 @@ public class StockBalanceResponse {
     private final MeasurementUnit measurementUnit;
     private final BigDecimal quantityOnHand;
     private final BigDecimal minimumStockLevel;
+    private final BigDecimal reorderLevel;
+    private final StockStatus stockStatus;
     private final boolean lowStock;
     private final Long version;
     private final LocalDateTime createdAt;
     private final LocalDateTime updatedAt;
 
-    public StockBalanceResponse(StockBalance balance) {
+    public StockBalanceResponse(StockBalance balance, BigDecimal reorderLevel) {
 
         this.id = balance.getId();
 
@@ -46,8 +49,10 @@ public class StockBalanceResponse {
                 balance.getInventoryItem().getMeasurementUnit();
 
         this.quantityOnHand = balance.getQuantityOnHand();
-        this.minimumStockLevel = balance.getMinimumStockLevel();
-        this.lowStock = balance.isLowStock();
+        this.reorderLevel = reorderLevel;
+        this.minimumStockLevel = reorderLevel == null ? BigDecimal.ZERO : reorderLevel;
+        this.stockStatus = StockStatus.fromQuantity(balance.getQuantityOnHand(), reorderLevel);
+        this.lowStock = stockStatus != StockStatus.NORMAL;
         this.version = balance.getVersion();
         this.createdAt = balance.getCreatedAt();
         this.updatedAt = balance.getUpdatedAt();
@@ -87,6 +92,14 @@ public class StockBalanceResponse {
 
     public BigDecimal getMinimumStockLevel() {
         return minimumStockLevel;
+    }
+
+    public BigDecimal getReorderLevel() {
+        return reorderLevel;
+    }
+
+    public StockStatus getStockStatus() {
+        return stockStatus;
     }
 
     public boolean isLowStock() {

@@ -89,6 +89,8 @@ class LowStockAlertServiceImplTest {
         assertEquals(StockStatus.LOW_STOCK, StockStatus.fromQuantity(new BigDecimal("10"), new BigDecimal("10")));
         assertEquals(StockStatus.LOW_STOCK, StockStatus.fromQuantity(new BigDecimal("5"), new BigDecimal("10")));
         assertEquals(StockStatus.OUT_OF_STOCK, StockStatus.fromQuantity(BigDecimal.ZERO, new BigDecimal("10")));
+        assertEquals(StockStatus.OUT_OF_STOCK, StockStatus.fromQuantity(BigDecimal.ZERO, BigDecimal.ZERO));
+        assertEquals(StockStatus.NORMAL, StockStatus.fromQuantity(BigDecimal.ONE, BigDecimal.ZERO));
     }
 
     @Test

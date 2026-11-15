@@ -25,6 +25,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -126,6 +127,28 @@ class StockReorderLevelServiceImplTest {
         service.reactivateConfiguration("Main", 1L, null);
 
         assertTrue(config.isActive());
+        verify(lowStockAlertEvaluationService).evaluateItem("Main", 1L);
+    }
+
+    @Test
+    void thresholdChangeReevaluatesTheCurrentStock() {
+        when(locationRepository.existsById("Main")).thenReturn(true);
+        when(inventoryItemRepository.existsById(1L)).thenReturn(true);
+        when(reorderLevelRepository.findForUpdate("Main", 1L)).thenReturn(Optional.of(config));
+        when(reorderLevelRepository.saveAndFlush(any(StockReorderLevel.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stockBalanceRepository.findByStockLocation_LocationCodeAndInventoryItem_Id("Main", 1L))
+                .thenReturn(Optional.empty());
+
+        var response = service.updateConfiguration(
+                "Main",
+                1L,
+                new BigDecimal("15"),
+                null,
+                null
+        );
+
+        assertEquals(new BigDecimal("15"), response.reorderLevel());
         verify(lowStockAlertEvaluationService).evaluateItem("Main", 1L);
     }
 

@@ -62,6 +62,7 @@ public class StockBalance {
     )
     private BigDecimal quantityOnHand = BigDecimal.ZERO;
 
+    // Kept mapped for existing schemas; reorder policy is owned by StockReorderLevel.
     @NotNull
     @DecimalMin("0.000")
     @Digits(integer = 15, fraction = 3)
@@ -134,10 +135,6 @@ public class StockBalance {
         return quantityOnHand;
     }
 
-    public BigDecimal getMinimumStockLevel() {
-        return minimumStockLevel;
-    }
-
     public Long getVersion() {
         return version;
     }
@@ -148,19 +145,6 @@ public class StockBalance {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
-    }
-
-    public boolean isLowStock() {
-        return quantityOnHand.compareTo(
-                minimumStockLevel
-        ) < 0;
-    }
-
-    public void setMinimumStockLevel(
-            BigDecimal minimumStockLevel
-    ) {
-        validateNonNegative(minimumStockLevel);
-        this.minimumStockLevel = minimumStockLevel;
     }
 
     public void increaseQuantity(BigDecimal quantity) {

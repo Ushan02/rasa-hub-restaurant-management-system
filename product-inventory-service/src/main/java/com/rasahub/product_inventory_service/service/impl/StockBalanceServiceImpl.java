@@ -6,6 +6,7 @@ import com.rasahub.product_inventory_service.dto.stockbalance.StockBalanceRespon
 import com.rasahub.product_inventory_service.entity.InventoryItem;
 import com.rasahub.product_inventory_service.entity.StockBalance;
 import com.rasahub.product_inventory_service.entity.StockLocation;
+import com.rasahub.product_inventory_service.entity.StockReorderLevel;
 import com.rasahub.product_inventory_service.enums.MeasurementUnit;
 import com.rasahub.product_inventory_service.enums.StockStatus;
 import com.rasahub.product_inventory_service.exception.BusinessRuleException;
@@ -14,15 +15,17 @@ import com.rasahub.product_inventory_service.repository.InventoryItemRepository;
 import com.rasahub.product_inventory_service.repository.StockBalanceRepository;
 import com.rasahub.product_inventory_service.repository.StockLocationRepository;
 import com.rasahub.product_inventory_service.repository.StockReorderLevelRepository;
-import com.rasahub.product_inventory_service.service.LowStockAlertEvaluationService;
 import com.rasahub.product_inventory_service.service.StockBalanceService;
+import com.rasahub.product_inventory_service.service.StockReorderLevelService;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -31,37 +34,21 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     private final StockBalanceRepository stockBalanceRepository;
     private final StockLocationRepository stockLocationRepository;
     private final InventoryItemRepository inventoryItemRepository;
-    private final LowStockAlertEvaluationService lowStockAlertEvaluationService;
     private final StockReorderLevelRepository stockReorderLevelRepository;
+    private final StockReorderLevelService stockReorderLevelService;
 
-    public StockBalanceServiceImpl(
-            StockBalanceRepository stockBalanceRepository,
-            StockLocationRepository stockLocationRepository,
-            InventoryItemRepository inventoryItemRepository,
-            StockReorderLevelRepository stockReorderLevelRepository
-    ) {
-        this(
-                stockBalanceRepository,
-                stockLocationRepository,
-                inventoryItemRepository,
-                stockReorderLevelRepository,
-                null
-        );
-    }
-
-    @Autowired
     public StockBalanceServiceImpl(
             StockBalanceRepository stockBalanceRepository,
             StockLocationRepository stockLocationRepository,
             InventoryItemRepository inventoryItemRepository,
             StockReorderLevelRepository stockReorderLevelRepository,
-            LowStockAlertEvaluationService lowStockAlertEvaluationService
+            StockReorderLevelService stockReorderLevelService
     ) {
         this.stockBalanceRepository = stockBalanceRepository;
         this.stockLocationRepository = stockLocationRepository;
         this.inventoryItemRepository = inventoryItemRepository;
-        this.lowStockAlertEvaluationService = lowStockAlertEvaluationService;
         this.stockReorderLevelRepository = stockReorderLevelRepository;
+        this.stockReorderLevelService = stockReorderLevelService;
     }
 
     @Override
@@ -70,13 +57,16 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     ) {
         StockLocation location = findLocation(locationCode);
 
-        return stockBalanceRepository
-                .findByStockLocation_LocationCode(
+        return toResponses(
+                stockBalanceRepository.findByStockLocation_LocationCode(location.getLocationCode()),
+                stockReorderLevelRepository.findByStockLocation_LocationCodeAndActiveTrue(
                         location.getLocationCode()
-                )
-                .stream()
-                .map(StockBalanceResponse::new)
-                .toList();
+                ).stream().collect(Collectors.toMap(
+                        config -> config.getInventoryItem().getId(),
+                        StockReorderLevel::getReorderLevel
+                )),
+                balance -> balance.getInventoryItem().getId()
+        );
     }
 
     @Override
@@ -85,11 +75,16 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     ) {
         InventoryItem item = findInventoryItem(inventoryItemId);
 
-        return stockBalanceRepository
-                .findByInventoryItem_Id(item.getId())
-                .stream()
-                .map(StockBalanceResponse::new)
-                .toList();
+        return toResponses(
+                stockBalanceRepository.findByInventoryItem_Id(item.getId()),
+                stockReorderLevelRepository.findByInventoryItem_IdAndActiveTrue(item.getId())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                config -> config.getStockLocation().getLocationCode(),
+                                StockReorderLevel::getReorderLevel
+                        )),
+                balance -> balance.getStockLocation().getLocationCode()
+        );
     }
 
     @Override
@@ -111,7 +106,16 @@ public class StockBalanceServiceImpl implements StockBalanceService {
                         )
                 );
 
-        return new StockBalanceResponse(balance);
+        return toResponse(
+                balance,
+                stockReorderLevelRepository
+                        .findByStockLocation_LocationCodeAndInventoryItem_IdAndActiveTrue(
+                                location.getLocationCode(),
+                                item.getId()
+                        )
+                        .map(StockReorderLevel::getReorderLevel)
+                        .orElse(null)
+        );
     }
 
     @Override
@@ -120,24 +124,24 @@ public class StockBalanceServiceImpl implements StockBalanceService {
     ) {
         StockLocation location = findLocation(locationCode);
 
-        return stockBalanceRepository
-                .findByStockLocation_LocationCode(
-                        location.getLocationCode()
-                )
+        List<StockBalance> balances =
+                stockBalanceRepository.findByStockLocation_LocationCode(location.getLocationCode());
+        Map<Long, BigDecimal> reorderLevels = stockReorderLevelRepository
+                .findByStockLocation_LocationCodeAndActiveTrue(location.getLocationCode())
                 .stream()
-                .filter(balance -> {
-                    BigDecimal threshold = stockReorderLevelRepository
-                            .findByStockLocation_LocationCodeAndInventoryItem_Id(
-                                    location.getLocationCode(),
-                                    balance.getInventoryItem().getId()
-                            )
-                            .filter(config -> config.isActive())
-                            .map(config -> config.getReorderLevel())
-                            .orElse(balance.getMinimumStockLevel());
-
-                    return StockStatus.fromQuantity(balance.getQuantityOnHand(), threshold) != StockStatus.NORMAL;
-                })
-                .map(StockBalanceResponse::new)
+                .collect(Collectors.toMap(
+                        config -> config.getInventoryItem().getId(),
+                        StockReorderLevel::getReorderLevel
+                ));
+        return balances.stream()
+                .filter(balance -> StockStatus.fromQuantity(
+                        balance.getQuantityOnHand(),
+                        reorderLevels.get(balance.getInventoryItem().getId())
+                ) != StockStatus.NORMAL)
+                .map(balance -> toResponse(
+                        balance,
+                        reorderLevels.get(balance.getInventoryItem().getId())
+                ))
                 .toList();
     }
 
@@ -180,28 +184,60 @@ public class StockBalanceServiceImpl implements StockBalanceService {
             );
         }
 
+        StockReorderLevel configuration = stockReorderLevelRepository
+                .findForUpdate(
+                        location.getLocationCode(),
+                        item.getId()
+                )
+                .orElse(null);
+        if (configuration == null) {
+            stockReorderLevelService.createConfiguration(
+                    location.getLocationCode(),
+                    item.getId(),
+                    minimumLevel,
+                    null,
+                    null
+            );
+        } else {
+            stockReorderLevelService.updateConfiguration(
+                    location.getLocationCode(),
+                    item.getId(),
+                    minimumLevel,
+                    configuration.getRecommendedReorderQuantity(),
+                    null
+            );
+        }
+
         StockBalance balance = stockBalanceRepository
                 .findForUpdate(
                         location.getLocationCode(),
                         item.getId()
                 )
-                .orElseGet(() ->
-                        new StockBalance(location, item)
-                );
+                .orElseGet(() -> stockBalanceRepository.saveAndFlush(new StockBalance(location, item)));
+        return toResponse(
+                balance,
+                stockReorderLevelRepository
+                        .findByStockLocation_LocationCodeAndInventoryItem_IdAndActiveTrue(
+                                location.getLocationCode(),
+                                item.getId()
+                        )
+                        .map(StockReorderLevel::getReorderLevel)
+                        .orElse(null)
+        );
+    }
 
-        balance.setMinimumStockLevel(minimumLevel);
+    private <K> List<StockBalanceResponse> toResponses(
+            List<StockBalance> balances,
+            Map<K, BigDecimal> reorderLevels,
+            Function<StockBalance, K> keyExtractor
+    ) {
+        return balances.stream()
+                .map(balance -> toResponse(balance, reorderLevels.get(keyExtractor.apply(balance))))
+                .toList();
+    }
 
-        StockBalance savedBalance =
-                stockBalanceRepository.saveAndFlush(balance);
-
-        if (lowStockAlertEvaluationService != null) {
-            lowStockAlertEvaluationService.evaluateItem(
-                    location.getLocationCode(),
-                    item.getId()
-            );
-        }
-
-        return new StockBalanceResponse(savedBalance);
+    private StockBalanceResponse toResponse(StockBalance balance, BigDecimal reorderLevel) {
+        return new StockBalanceResponse(balance, reorderLevel);
     }
 
     private StockLocation findLocation(String locationCode) {

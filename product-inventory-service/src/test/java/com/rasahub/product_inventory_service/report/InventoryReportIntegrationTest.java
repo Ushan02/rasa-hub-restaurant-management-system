@@ -1,5 +1,7 @@
 package com.rasahub.product_inventory_service.report;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rasahub.product_inventory_service.dto.report.PageResponse;
 import com.rasahub.product_inventory_service.dto.report.StockBalanceReportResponse;
 import com.rasahub.product_inventory_service.dto.report.StockMovementReportResponse;
@@ -7,6 +9,7 @@ import com.rasahub.product_inventory_service.dto.report.DailyUsageReportResponse
 import com.rasahub.product_inventory_service.dto.report.StockAdjustmentReportResponse;
 import com.rasahub.product_inventory_service.dto.report.StockCountReportResponse;
 import com.rasahub.product_inventory_service.dto.report.LowStockReportResponse;
+import com.rasahub.product_inventory_service.dto.stockbalance.StockBalanceResponse;
 import com.rasahub.product_inventory_service.entity.LowStockAlert;
 import com.rasahub.product_inventory_service.entity.StockAdjustment;
 import com.rasahub.product_inventory_service.entity.StockCount;
@@ -39,6 +42,7 @@ import com.rasahub.product_inventory_service.enums.PurchaseRequestStatus;
 import com.rasahub.product_inventory_service.enums.GoodsReceiptStatus;
 import com.rasahub.product_inventory_service.enums.BranchStockRequestStatus;
 import com.rasahub.product_inventory_service.enums.StockTransferStatus;
+import com.rasahub.product_inventory_service.enums.StockStatus;
 import com.rasahub.product_inventory_service.repository.LowStockAlertRepository;
 import com.rasahub.product_inventory_service.repository.StockAdjustmentRepository;
 import com.rasahub.product_inventory_service.repository.StockCountRepository;
@@ -55,12 +59,14 @@ import com.rasahub.product_inventory_service.repository.GoodsReceiptNoteReposito
 import com.rasahub.product_inventory_service.repository.BranchStockRequestRepository;
 import com.rasahub.product_inventory_service.repository.StockTransferRepository;
 import com.rasahub.product_inventory_service.service.InventoryReportService;
+import com.rasahub.product_inventory_service.service.StockBalanceService;
 import com.rasahub.product_inventory_service.security.ProductUserPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -77,6 +83,9 @@ class InventoryReportIntegrationTest {
 
     @Autowired
     private InventoryReportService reportService;
+
+    @Autowired
+    private StockBalanceService stockBalanceService;
 
     @Autowired
     private StockLocationRepository locationRepository;
@@ -138,6 +147,7 @@ class InventoryReportIntegrationTest {
 
         StockBalance balance = new StockBalance(main, stockedItem);
         balance.increaseQuantity(new BigDecimal("2.500"));
+        ReflectionTestUtils.setField(balance, "minimumStockLevel", new BigDecimal("100.000"));
         balanceRepository.saveAndFlush(balance);
         reorderLevelRepository.saveAndFlush(new StockReorderLevel(
                 main,
@@ -167,6 +177,42 @@ class InventoryReportIntegrationTest {
         assertEquals(new BigDecimal("2.500"), stocked.currentQuantity());
         assertEquals(new BigDecimal("3.000"), stocked.reorderLevel());
         assertEquals("LOW_STOCK", stocked.stockStatus().name());
+        StockBalanceResponse balanceResponse =
+                stockBalanceService.getBalance("Main", stockedItem.getId());
+        assertEquals(new BigDecimal("3.000"), balanceResponse.getReorderLevel());
+        assertEquals(new BigDecimal("3.000"), balanceResponse.getMinimumStockLevel());
+        assertEquals(StockStatus.LOW_STOCK, balanceResponse.getStockStatus());
+        assertTrue(balanceResponse.isLowStock());
+        JsonNode serialized = new ObjectMapper().findAndRegisterModules()
+                .valueToTree(balanceResponse);
+        assertEquals("LOW_STOCK", serialized.get("stockStatus").asText());
+        assertEquals(0, serialized.get("reorderLevel").decimalValue()
+                .compareTo(new BigDecimal("3.000")));
+
+        StockLocation branch = saveLocation("BR001", "Veyangoda", StockLocationType.BRANCH);
+        StockBalance branchBalance = new StockBalance(branch, stockedItem);
+        branchBalance.increaseQuantity(new BigDecimal("2.500"));
+        balanceRepository.saveAndFlush(branchBalance);
+        reorderLevelRepository.saveAndFlush(new StockReorderLevel(
+                branch,
+                stockedItem,
+                new BigDecimal("2.000")
+        ));
+        var balancesByItem = stockBalanceService.getBalancesByInventoryItem(stockedItem.getId());
+        StockBalanceResponse branchResponse = balancesByItem.stream()
+                .filter(row -> row.getLocationCode().equals("BR001"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(new BigDecimal("2.000"), branchResponse.getReorderLevel());
+        assertEquals(StockStatus.NORMAL, branchResponse.getStockStatus());
+        var branchReport = reportService.getStockBalances("BR001", stockedItem.getId(), 0, 20);
+        assertEquals(branchResponse.getStockStatus(),
+                branchReport.content().getFirst().stockStatus());
+
+        var lowStockBalances = stockBalanceService.getLowStockBalances("Main");
+        assertTrue(lowStockBalances.stream().anyMatch(
+                row -> row.getInventoryItemId().equals(stockedItem.getId())
+        ));
         assertEquals(BigDecimal.ZERO.setScale(3), zero.currentQuantity());
         assertEquals("OUT_OF_STOCK", zero.stockStatus().name());
         assertNull(zero.lastStockUpdateAt());

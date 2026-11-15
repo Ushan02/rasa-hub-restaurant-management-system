@@ -28,6 +28,15 @@ public interface StockReorderLevelRepository extends JpaRepository<StockReorderL
     );
 
     @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
+    List<StockReorderLevel> findByInventoryItem_IdAndActiveTrue(Long inventoryItemId);
+
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
+    Optional<StockReorderLevel> findByStockLocation_LocationCodeAndInventoryItem_IdAndActiveTrue(
+            String locationCode,
+            Long inventoryItemId
+    );
+
+    @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
     List<StockReorderLevel> findByActiveTrue();
 
     @EntityGraph(attributePaths = {"stockLocation", "inventoryItem"})
