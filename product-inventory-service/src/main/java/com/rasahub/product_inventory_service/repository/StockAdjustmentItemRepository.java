@@ -1,3 +1,4 @@
+
 package com.rasahub.product_inventory_service.repository;
 
 import com.rasahub.product_inventory_service.dto.report.StockAdjustmentReportResponse;
