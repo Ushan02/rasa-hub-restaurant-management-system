@@ -11,9 +11,9 @@
 	<groupId>com.rasahub </groupId>
 	<artifactId>product-inventory-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>Taste Island Product and Inventory Service</name>
+	<description>Menu, product, supplier, inventory, and procurement management for Taste Island.</description>
+	<url>https://github.com/Ushan02/taste-island-restaurant-management-system</url>
 	<licenses>
 		<license/>
 	</licenses>

@@ -11,9 +11,9 @@
 	<groupId>com.rasahub</groupId>
 	<artifactId>auth-people-service</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>Taste Island Auth and People Service</name>
+	<description>Authentication, staff, customer, and branch management for Taste Island.</description>
+	<url>https://github.com/Ushan02/taste-island-restaurant-management-system</url>
 	<licenses>
 		<license/>
 	</licenses>

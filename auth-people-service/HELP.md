@@ -1,4 +1,4 @@
-# Read Me First
+# Taste Island Auth and People Service
 The following was discovered as part of building this project:
 
 * The original package name 'com.rasahub.auth-people-service' is invalid and this project uses 'com.rasahub.auth_people_service' instead.

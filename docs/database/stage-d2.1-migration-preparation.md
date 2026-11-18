@@ -1,4 +1,4 @@
-# Stage D2.1: Safe Flyway Migration Preparation
+# Taste Island Flyway Migration Preparation (Stage D2.1)
 
 ## Scope and safety
 
